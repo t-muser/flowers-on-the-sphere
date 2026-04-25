@@ -43,8 +43,8 @@ def main() -> int:
                     help="Directory for the Dedalus HDF5 snapshots.")
     ap.add_argument("--nphi", type=int, default=256)
     ap.add_argument("--ntheta", type=int, default=128)
-    ap.add_argument("--stop-sim-time", type=float, default=130.0,
-                    help="Stop simulation at this many τ (default: 130·τ).")
+    ap.add_argument("--stop-sim-time", type=float, default=65.0,
+                    help="Stop simulation at this many τ (default: 65·τ).")
     ap.add_argument("--snapshot-dt", type=float, default=0.2,
                     help="Snapshot cadence in τ units (default: τ/5).")
     ap.add_argument("--initial-dt", type=float, default=5.0e-3)
