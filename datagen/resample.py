@@ -26,7 +26,6 @@ import h5py
 import numpy as np
 import xarray as xr
 from scipy.interpolate import CubicSpline
-from scipy.spatial import cKDTree
 
 from datagen.galewsky._units import METER, SECOND
 
@@ -246,11 +245,10 @@ def _write_latlon_zarr(
 ) -> None:
     """Write a stack of ``(Nt, Nlat, Nlon)`` field arrays to a Zarr store.
 
-    Shared low-level writer for both the structured (Dedalus) and unstructured
-    (FiPy) resampling paths. ``field_arrays`` and ``field_names`` are expected
-    to be aligned: ``field_arrays[i]`` corresponds to ``field_names[i]``.
-    ``lat_target`` and ``lon_target`` are in radians and are converted to
-    degrees here for the on-disk coordinates.
+    ``field_arrays`` and ``field_names`` are expected to be aligned:
+    ``field_arrays[i]`` corresponds to ``field_names[i]``. ``lat_target``
+    and ``lon_target`` are in radians and are converted to degrees here
+    for the on-disk coordinates.
     """
     out_path = Path(out_path)
     fields = np.stack(list(field_arrays), axis=1)
@@ -280,95 +278,3 @@ def _write_latlon_zarr(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     encoding = {"fields": {"chunks": (1, len(field_names), Nlat, Nlon)}}
     ds.to_zarr(str(out_path), mode="w", consolidated=True, encoding=encoding)
-
-
-def resample_unstructured_run(
-    raw_path: Path,
-    out_path: Path,
-    Nlat: int,
-    Nlon: int,
-    field_specs: Mapping[str, str],
-    params: dict | None,
-    run_id: int | None,
-    *,
-    k_neighbors: int = 4,
-    time_units: str = "solver units (dimensionless)",
-    description: str | None = None,
-) -> None:
-    """Resample a single unstructured-mesh HDF5 run to a regular ``(lat, lon)`` Zarr.
-
-    Designed for the FiPy Cahn-Hilliard solver (``datagen.cahn_hilliard``) which
-    writes per-snapshot scalar fields on the cell centers of a thin spherical
-    shell mesh. ``field_specs`` maps output field names to HDF5 task names
-    under ``/tasks/`` (scalar tasks only).
-
-    The cell centers (``/scales/cell_xyz``) are projected to the unit sphere,
-    a single ``cKDTree`` is built, and ``k_neighbors`` nearest neighbours are
-    queried per target grid point. Inverse-distance weights are computed once
-    and reused across snapshots; the per-snapshot cost is just an indexed
-    gather + weighted sum. Chord-distance handles the longitude wrap-around
-    natively, and pulling from multiple cells averages out the inner/outer
-    duplicate sampling that comes from the radial extrusion.
-    """
-    raw_path = Path(raw_path)
-    out_path = Path(out_path)
-
-    field_names = list(field_specs.keys())
-    task_names = [field_specs[n] for n in field_names]
-
-    with h5py.File(raw_path, mode="r") as f:
-        cell_xyz = f["scales/cell_xyz"][:]              # (Ncells, 3)
-        sim_time = f["scales/sim_time"][:]              # (Nt,)
-        raw_fields = {name: f["tasks"][task][:]          # (Nt, Ncells)
-                      for name, task in zip(field_names, task_names)}
-
-    # Project cell centers to the unit sphere (ignore the radial extrusion).
-    norms = np.linalg.norm(cell_xyz, axis=1, keepdims=True)
-    xyz_unit = cell_xyz / norms
-
-    lat_target = regular_lat_grid(Nlat)
-    lon_target = regular_lon_grid(Nlon)
-
-    lat_g, lon_g = np.meshgrid(lat_target, lon_target, indexing="ij")  # (Nlat, Nlon)
-    cos_lat = np.cos(lat_g)
-    target_xyz = np.stack(
-        [cos_lat * np.cos(lon_g), cos_lat * np.sin(lon_g), np.sin(lat_g)],
-        axis=-1,
-    ).reshape(-1, 3)                                   # (Nlat*Nlon, 3)
-
-    tree = cKDTree(xyz_unit)
-    dists, idx = tree.query(target_xyz, k=k_neighbors)
-    if k_neighbors == 1:
-        # Make the shape uniformly (Ntargets, k) so the gather code below works.
-        dists = dists[:, None]
-        idx = idx[:, None]
-    eps = 1.0e-12
-    w = 1.0 / (dists + eps)
-    w /= w.sum(axis=1, keepdims=True)                  # (Ntargets, k)
-
-    arrays = []
-    for name in field_names:
-        # raw shape: (Nt, Ncells); idx shape: (Ntargets, k).
-        gathered = raw_fields[name][:, idx]            # (Nt, Ntargets, k)
-        latlon_flat = (gathered * w).sum(axis=-1)      # (Nt, Ntargets)
-        arrays.append(
-            latlon_flat.reshape(-1, Nlat, Nlon).astype(np.float32)
-        )
-
-    if description is None:
-        description = (
-            "Unstructured spherical snapshot, resampled to regular (lat, lon)."
-        )
-
-    _write_latlon_zarr(
-        out_path,
-        time_arr=np.asarray(sim_time, dtype=np.float64),
-        field_arrays=arrays,
-        field_names=field_names,
-        lat_target=lat_target,
-        lon_target=lon_target,
-        description=description,
-        run_id=run_id,
-        params=params,
-        time_units=time_units,
-    )

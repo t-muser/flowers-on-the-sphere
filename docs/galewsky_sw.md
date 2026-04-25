@@ -9,14 +9,22 @@ and a rollup of cyclones along the jet's poleward flank.
 equations on a rotating sphere of Earth-like radius for sixteen simulated
 days, of which the first four (linear spinup) are discarded, leaving a
 twelve-day window in the post-saturation / turbulent regime. The initial
-condition is the Galewsky et al. (2004) test case: a
-compact-support zonal jet in latitude, geostrophically + cyclostrophically
-balanced by an elevation step across the jet, with a bi-Gaussian height
-bump breaking zonal symmetry. The perturbation grows into a wave train
-whose breakdown into filamentary cyclones by day 4–6 is a standard
-benchmark for atmospheric-flow solvers on the sphere. The ensemble
-explores a 5-axis parameter box over the jet strength, jet latitude,
-perturbation amplitude, mean fluid depth, and perturbation longitude.
+condition is a bi-hemispheric extension of the Galewsky et al. (2004) test
+case: a pair of compact-support zonal jets — the canonical northern jet
+plus a mirrored southern jet at the opposite latitude — geostrophically
++ cyclostrophically balanced by the corresponding height profile, with a
+bi-Gaussian height bump applied **only on the northern jet** to break
+hemispheric symmetry. The asymmetric trigger forces cross-equatorial
+Rossby propagation as the dominant signal distinguishing trajectories.
+The perturbed jet rolls up into filamentary cyclones by day 4–6 (the
+standard barotropic-instability benchmark) while the unperturbed jet
+slowly receives the Rossby wave train across the equator. The solver
+itself runs in the canonical (polar-aligned) frame; a per-trajectory
+random `SO(3)` tilt is applied at postprocess time so the physical
+rotation axis is **not** aligned with the computational pole, removing
+the grid-memorisation shortcut a CNN/ViT would otherwise exploit. The
+ensemble explores a 5-axis parameter box over the jet strength, jet
+latitude, perturbation amplitude, mean fluid depth, and SO(3)-tilt seed.
 
 ## Associated resources
 
@@ -59,14 +67,18 @@ horizontal vector on `S²`. Total depth is `H + h`.
 | `R`   | `6.371 22 × 10⁶ m` | Earth radius |
 | `Ω`   | `7.292 × 10⁻⁵ rad/s` | Rotation rate |
 | `g`   | `9.806 16 m/s²` | Gravitational acceleration |
-| `ν`   | `1.0 × 10⁵ m²/s` at `N_θ = 256` | Hyperviscosity, scaled ∝ `1/N_θ²` |
+| `ν₀`  | `1.0 × 10⁵ m²/s`     | Reference Laplacian-equivalent viscosity (matched at `ℓ = 32`) |
 
 ### Hyperviscosity scaling
 
-`ν(N_θ) = ν₀ · (N_θ,ref / N_θ)²` with `ν₀ = 10⁵ m²/s`, `N_θ,ref = 256`.
-This keeps the grid-scale damping fixed in non-dimensional spectral
-space as the resolution changes. All trajectories in this ensemble use
-`ν = 10⁵ m²/s`.
+The biharmonic coefficient `ν` is set so its damping rate at spherical
+harmonic degree `ℓ_match = 32` matches a Laplacian viscosity
+`ν₀ = 10⁵ m²/s`, i.e. `ν · [ℓ(ℓ+1)/R²]² = ν₀ · ℓ(ℓ+1)/R²` at `ℓ = ℓ_match`,
+giving `ν = ν₀ · R² / ℓ_match²`. The resolution scaling is
+`ν(N_θ) = ν_base · (N_θ,ref / N_θ)⁴` with `N_θ,ref = 256`, so the
+grid-scale damping time is invariant under resolution changes (the
+biharmonic eigenvalue grows as `ℓ⁴`). All trajectories in this ensemble
+run at `N_θ = 256`.
 
 ## Data specifications
 
@@ -99,20 +111,31 @@ space as the resolution changes. All trajectories in this ensemble use
 
 | Field name | Units | Description |
 | --- | --- | --- |
-| `u_phi`     | `m/s` | Zonal (eastward) component of the horizontal velocity |
-| `u_theta`   | `m/s` | Meridional component in the native colatitude direction (southward) |
+| `u_phi`     | `m/s` | Zonal (eastward) component of the horizontal velocity, in the **post-tilt** local east basis |
+| `u_theta`   | `m/s` | Meridional component in the native colatitude direction (southward), in the **post-tilt** local south basis |
 | `h`         | `m`   | Surface-height perturbation about mean depth `H` |
 | `vorticity` | `1/s` | Relative vorticity `ζ = -∇·skew(u)` = vertical component of `∇×u` |
 
-All fields stored as `float32`.
+All fields stored as `float32`. After the SO(3) tilt the physical rotation
+axis no longer coincides with the computational pole, so the Coriolis
+parameter `f(λ, φ)` must be inferred from the velocity field itself
+rather than read off the grid.
+
+Two scalar metadata arrays are also written into each per-run Zarr to
+make the tilt recoverable:
+
+| Variable name    | Shape  | Dtype     | Description |
+| ---              | ---    | ---       | --- |
+| `so3_axis_xyz`   | `(3,)` | `float64` | Unit rotation axis in 3-D, drawn uniformly on `S²` from `seed` |
+| `so3_angle_rad`  | `()`   | `float64` | Rotation angle in radians, drawn uniformly on `[0, 2π)` from `seed` |
 
 ### Dataset size
 
-- **Number of trajectories.** 960.
+- **Number of trajectories.** 2 560.
 - **Shape per trajectory.** `(time=289, field=4, lat=256, lon=512)`.
-- **Per-trajectory size.** ≈ 503 MB (float32, uncompressed).
-- **Total ensemble size.** ≈ 483 GB.
-- **Consolidated shape.** `(run=960, time=289, field=4, lat=256, lon=512)`.
+- **Per-trajectory size.** ≈ 577 MB (float32, uncompressed).
+- **Total ensemble size.** ≈ 1.4 TB.
+- **Consolidated shape.** `(run=2560, time=289, field=4, lat=256, lon=512)`.
 
 ### Storage format
 
@@ -126,11 +149,11 @@ dimension with parameter arrays carried as `param_*` coords. The
 
 ### Train / val / test split
 
-A fixed 80 / 10 / 10 split of the 960 run IDs is distributed with the
+A fixed 80 / 10 / 10 split of the 2 560 run IDs is distributed with the
 dataset as `splits.json` alongside `manifest.json`. The split is
 **stratified on `u_max`** with a deterministic RNG seed so every split
 sees all five jet-strength values in the target proportions. Counts are
-`{train: 770, val: 95, test: 95}`. Typical use:
+`{train: 2048, val: 256, test: 256}`. Typical use:
 
 ```python
 import json, xarray as xr
@@ -143,23 +166,29 @@ train_runs = [xr.open_zarr(f"{root}/processed/run_{i:04d}.zarr") for i in splits
 ## Initial conditions
 
 All trajectories share the same three-stage IC construction, parameterized
-by the 5-axis grid below.
+by the 5-axis grid below. The IC is built in the canonical (polar-aligned)
+frame; the per-trajectory SO(3) tilt is applied at postprocess time (see
+[Per-trajectory SO(3) tilt](#per-trajectory-so3-tilt)).
 
-### 1. Zonal jet profile
+### 1. Bi-hemispheric zonal jet profile
 
-A compact-support analytic jet in latitude, nonzero only inside
-`[lat_center − 20°, lat_center + 20°]`, reaching peak amplitude
-`u_max` at the jet center:
+A pair of compact-support analytic jets in latitude, summing the
+canonical northern jet at `+lat_center` and a mirrored southern jet
+at `−lat_center`. Each jet is nonzero only inside
+`[lat_c − 20°, lat_c + 20°]` and reaches peak amplitude `u_max` at its
+own jet centre:
 
 $$
-u_\phi(\varphi) = \frac{u_\mathrm{max}}{e_n}\,
-  \exp\!\Bigl(\tfrac{1}{(\varphi - \varphi_0)(\varphi - \varphi_1)}\Bigr),
-  \quad \varphi_0 < \varphi < \varphi_1,
+u_\phi(\varphi) \;=\; J_+(\varphi)\;+\;J_-(\varphi),\qquad
+J_{\pm}(\varphi) \;=\; \frac{u_\mathrm{max}}{e_n}\,
+  \exp\!\Bigl(\tfrac{1}{(\varphi - \varphi_0^{\pm})(\varphi - \varphi_1^{\pm})}\Bigr)
+  \text{ inside its support, } 0 \text{ elsewhere},
 $$
 
-with `e_n = exp(−4/(φ₁ − φ₀)²)` chosen so the maximum equals `u_max`.
-Outside the band `u_φ ≡ 0`. Meridional velocity `u_θ ≡ 0` at initial
-time.
+with `e_n = exp(−4/(φ₁ − φ₀)²)` chosen so the per-jet maximum equals
+`u_max`. The jet supports never overlap because every grid value of
+`lat_center` (≥ 30°) exceeds the half-width (`20°`). Meridional
+velocity `u_θ ≡ 0` at initial time.
 
 ### 2. Geostrophic + cyclostrophic balance for `h`
 
@@ -171,15 +200,16 @@ $$
   \Bigl(2\Omega R\sin\varphi + u_\phi \tan\varphi\Bigr),
 $$
 
-on a fine uniform grid in `φ`, followed by cos-weighted area-mean
-subtraction so that `⟨h⟩ = 0`. The resulting 1-D profile `h(φ)` is
-evaluated at the native solver colatitude nodes by cubic interpolation.
-Because `u_φ = 0` near the poles, `u_φ · tan(φ)` is well-behaved at
-the singular endpoints.
+driven by the **two-jet** `u_φ` profile, on a fine uniform grid in `φ`,
+followed by cos-weighted area-mean subtraction so that `⟨h⟩ = 0`. The
+resulting 1-D profile `h(φ)` is evaluated at the native solver
+colatitude nodes by cubic interpolation. Because `u_φ = 0` near the
+poles, `u_φ · tan(φ)` is well-behaved at the singular endpoints.
 
-### 3. Bi-Gaussian height perturbation
+### 3. Asymmetric bi-Gaussian height perturbation
 
-A localized Galewsky bump is added on top of the balanced height:
+A localized Galewsky bump is added on top of the balanced height **on
+the northern jet only**:
 
 $$
 h'(\lambda, \varphi) = \hat{h}\,\cos(\varphi)\,
@@ -188,9 +218,38 @@ h'(\lambda, \varphi) = \hat{h}\,\cos(\varphi)\,
 $$
 
 with fixed widths `α = 1/3` (meridional) and `β = 1/15` (zonal),
-perturbation amplitude `ĥ = h_hat`, and perturbation center
-`(λ_c, φ_c) = (lon_c, lat_center)` — i.e. the bump sits at the jet
-center in latitude and at the prescribed longitude.
+perturbation amplitude `ĥ = h_hat`, and perturbation centre
+`(λ_c, φ_c) = (0, +lat_center)`. The longitude of the bump is
+hard-coded to `0` in the canonical frame; rotational diversity across
+the ensemble is supplied by the per-trajectory SO(3) tilt rather than
+by the previous `lon_c` axis. The southern jet is left unperturbed, so
+delayed Rossby waves propagating across the equator are the only signal
+that disturbs it within the simulation window.
+
+## Per-trajectory SO(3) tilt
+
+The Dedalus shallow-water solver uses the standard Coriolis term
+`2·Ω·sin(φ)·k̂×u`, which is only valid in the frame where the rotation
+axis is the polar axis. Running with a tilted rotation axis would break
+that closed form. Instead, every trajectory runs in the canonical frame
+and a per-trajectory rotation `R(ê, α) ∈ SO(3)` is applied **once**, at
+postprocess time, to the resampled `(lat, lon)` snapshots. The pair
+`(ê, α)` is drawn deterministically from the run's `seed`:
+
+- `ê` uniform on `S²` (z uniform in `[−1, 1]`, longitude uniform in
+  `[0, 2π)`), stored as `so3_axis_xyz`.
+- `α` uniform in `[0, 2π)`, stored as `so3_angle_rad`.
+
+Sampling the polar-frame field at the back-rotated grid points is
+equivalent to running the simulation on a tilted-axis sphere. Scalar
+fields (`h`, `vorticity`) are bicubic-interpolated at the back-rotated
+query grid (with periodic-wrap padding in longitude). The velocity pair
+`(u_phi, u_theta)` additionally gets the local-frame Jacobian applied
+per gridpoint, so its components are expressed in the **output** local
+east/south basis at every rotated location. Implementation in
+[`datagen/galewsky/so3.py`](../datagen/galewsky/so3.py); the
+postprocess step that consumes it is in
+[`datagen/galewsky/scripts/postprocess.py`](../datagen/galewsky/scripts/postprocess.py).
 
 ## Physical setup
 
@@ -209,9 +268,9 @@ center in latitude and at the prescribed longitude.
 ## Parameter space
 
 Runs are laid out on an explicit tensor grid over five axes
-(5 · 4 · 4 · 4 · 3 = **960** runs). Runs are indexed `run_0000 …
-run_0959` in row-major order over the tuple
-`(u_max, lat_center, h_hat, H, lon_c)`.
+(5 · 4 · 4 · 4 · 8 = **2 560** runs). Runs are indexed `run_0000 …
+run_2559` in row-major order over the tuple
+`(u_max, lat_center, h_hat, H, seed)`.
 
 | Parameter       | Units  | Values                                  | Count |
 | --- | --- | --- | --- |
@@ -219,23 +278,29 @@ run_0959` in row-major order over the tuple
 | `lat_center`    | °N     | 30, 40, 50, 60                          | 4 |
 | `h_hat`         | m      | 60, 120, 180, 240                       | 4 |
 | `H`             | m      | 8 000, 10 000, 12 000, 14 000           | 4 |
-| `lon_c`         | °      | 0, 120, 240                             | 3 |
+| `seed`          | —      | 0, 1, 2, 3, 4, 5, 6, 7                  | 8 |
 
 Jet half-width (`40°` full width), perturbation widths
 (`α = 1/3`, `β = 1/15`), grid resolution, and physics constants are
-identical across the ensemble.
+identical across the ensemble. The hard-coded perturbation longitude
+`lon_c = 0` (in the canonical frame) is also identical across the
+ensemble.
 
-The `lon_c` axis is a cheap rotational-augmentation factor: the
-physics is zonally symmetric, so `lon_c` shifts the instability trigger
-by a pure rotation of the initial condition. The other four axes are
+The `seed` axis controls the per-trajectory SO(3) tilt `(ê, α)` and
+replaces the previous `lon_c` axis as the rotational-augmentation
+factor. Beyond shifting the instability trigger by a rotation, it also
+breaks the alignment between the physical rotation axis and the
+computational pole — so a model can no longer infer the Coriolis
+parameter from the grid latitude alone. The other four axes are
 physically meaningful.
 
 ## Numerical-stability strategy
 
-1. **Preflight sweep** over the 32 box corners at half resolution
-   (`N_φ = 256, N_θ = 128`) for 1 simulated day. All 32 corners
-   completed without NaNs before the full sweep launched; this confirms
-   the 5-axis box is numerically stable.
+1. **Preflight sweep** over the 32 corners of the four physical axes
+   (`u_max × lat_center × h_hat × H`, `seed = 0`) at half resolution
+   (`N_φ = 256, N_θ = 128`) for 1 simulated day. All corners must
+   complete without NaNs before the full sweep launches; this confirms
+   the box is numerically stable.
 2. **CFL-adaptive `dt`** inside every run, with a hard ceiling
    `max_dt = 600 s`.
 3. **Per-run try/except** around the solver loop: on failure the
@@ -250,8 +315,8 @@ physically meaningful.
 - **Per-run wall.** ≈ 20 – 25 min on one scicore compute node with 16
   MPI ranks (AMD Epyc / Intel Xeon class nodes, 128-core `scicore`
   partition, one MPI rank per core with `OMP_NUM_THREADS = 1`).
-- **Total compute.** ≈ 5 000 – 6 500 core-hours for the full
-  ensemble (16 sim-days × 960 runs × 16 ranks × ~22 min).
+- **Total compute.** ≈ 13 000 – 18 000 core-hours for the full
+  ensemble (16 sim-days × 2 560 runs × 16 ranks × ~22 min).
 - **Solver precision.** `float64` throughout the simulation; all
   output fields are downcast to `float32` at resample time.
 - **Cluster.** sciCORE @ Universität Basel, `scicore` partition,

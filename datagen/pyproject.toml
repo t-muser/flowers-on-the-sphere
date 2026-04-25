@@ -19,8 +19,6 @@ dependencies = [
     "ipykernel>=7.2.0",
     "imageio[ffmpeg]>=2.37.3",
     "cartopy>=0.25.0",
-    "fipy",
-    "gmsh",
 ]
 
 [build-system]

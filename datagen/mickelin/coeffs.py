@@ -26,7 +26,8 @@ import math
 from typing import Tuple
 
 import numpy as np
-from scipy.special import lpmv
+
+from datagen._ylm import real_ylm as _real_ylm
 
 
 def coefficients_from_RLkT(
@@ -116,26 +117,22 @@ def growth_rate_spectrum(
     return f * (2.0 * K - k_sq)
 
 
-def _real_ylm(ell: int, m: int, theta: np.ndarray, phi: np.ndarray) -> np.ndarray:
-    """Real orthonormal spherical harmonic ``Y_{ℓm}(θ, φ)``.
+def unstable_band_ell_max(R: float, Lambda: float, kappa: float, safety: int = 4) -> int:
+    """Maximum ``ℓ`` covered by the Mickelin unstable band, plus a safety margin.
 
-    Convention: ``θ`` is colatitude (``0`` at the north pole), ``φ`` is
-    longitude. For ``m = 0`` the basis function is the standard Legendre
-    polynomial; for ``m > 0`` the real-cosine combination; for ``m < 0``
-    the real-sine combination, all with unit ``L²(S²)`` norm.
+    The unstable band in wavenumber is
+    ``k₊ = (π/Λ)·(1 + κΛ/2)``; converting to spherical-harmonic degree via
+    ``ℓ ≈ k·R`` and rounding up gives the smallest ``ℓ_init`` that already
+    seeds the linearly-fastest-growing modes. Adding ``safety`` margin pads
+    a few degrees above the band edge so the initial spectrum doesn't have
+    to climb up to the peak from below.
     """
-    x = np.cos(theta)
-    if m == 0:
-        norm = math.sqrt((2 * ell + 1) / (4.0 * math.pi))
-        return norm * lpmv(0, ell, x)
-    m_abs = abs(m)
-    log_num = math.lgamma(ell - m_abs + 1)
-    log_den = math.lgamma(ell + m_abs + 1)
-    norm = math.sqrt((2 * ell + 1) / (2.0 * math.pi)) * math.exp(0.5 * (log_num - log_den))
-    legendre = lpmv(m_abs, ell, x)
-    if m > 0:
-        return norm * legendre * np.cos(m_abs * phi)
-    return norm * legendre * np.sin(m_abs * phi)
+    if Lambda <= 0:
+        raise ValueError(f"Lambda must be positive, got {Lambda}")
+    if kappa <= 0:
+        raise ValueError(f"kappa must be positive, got {kappa}")
+    k_plus = (math.pi / Lambda) * (1.0 + kappa * Lambda / 2.0)
+    return int(math.ceil(R * k_plus)) + int(safety)
 
 
 def set_initial_conditions(

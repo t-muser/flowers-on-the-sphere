@@ -7,8 +7,8 @@
 #SBATCH --ntasks=8
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:30:00
-#SBATCH --output=datagen/mickelin/slurm/preflight-%A_%a.out
-#SBATCH --error=datagen/mickelin/slurm/preflight-%A_%a.err
+#SBATCH --output=datagen/mickelin/slurm/logs/preflight-%A_%a.out
+#SBATCH --error=datagen/mickelin/slurm/logs/preflight-%A_%a.err
 #
 # Mickelin GNS preflight: 8 extreme points of the
 # (r_over_lambda × kappa_lambda) box at half resolution (Nphi=128,

@@ -21,7 +21,11 @@ import math
 import numpy as np
 import pytest
 
-from datagen.mickelin.coeffs import coefficients_from_RLkT, growth_rate_spectrum
+from datagen.mickelin.coeffs import (
+    coefficients_from_RLkT,
+    growth_rate_spectrum,
+    unstable_band_ell_max,
+)
 
 
 @pytest.mark.parametrize(
@@ -126,3 +130,40 @@ def test_peak_rate_equals_inverse_tau(r_over_lambda, kappa_lambda, tau):
     ell = np.arange(1, 1024)
     sigma = growth_rate_spectrum(ell, R, Gamma_0, Gamma_2, Gamma_4)
     assert np.max(sigma) == pytest.approx(1.0 / tau, rel=1.0e-10)
+
+
+@pytest.mark.parametrize(
+    "r_over_lambda, kappa_lambda",
+    [
+        (4.0, 0.3),
+        (4.0, 0.7),
+        (6.0, 0.5),
+        (8.0, 0.5),
+        (10.0, 0.7),
+    ],
+)
+def test_unstable_band_ell_max(r_over_lambda, kappa_lambda):
+    """``unstable_band_ell_max`` should match ``ceil(R·k₊) + safety`` for the
+    Mickelin band-limit.
+    """
+    R = 1.0
+    Lambda = R / r_over_lambda
+    kappa = kappa_lambda / Lambda
+    safety = 4
+    expected_k_plus = (math.pi / Lambda) * (1.0 + kappa * Lambda / 2.0)
+    expected = int(math.ceil(R * expected_k_plus)) + safety
+    assert unstable_band_ell_max(R, Lambda, kappa, safety=safety) == expected
+
+
+def test_unstable_band_ell_max_covers_growth_peak():
+    """The derived ``ell_init`` must cover the linearly-fastest-growing
+    mode, otherwise the seed misses the unstable band entirely.
+    """
+    R = 1.0
+    Lambda = R / 8.0
+    kappa = 0.5 / Lambda
+    Gamma_0, Gamma_2, Gamma_4 = coefficients_from_RLkT(R, Lambda, kappa, 1.0)
+    ell = np.arange(1, 200)
+    sigma = growth_rate_spectrum(ell, R, Gamma_0, Gamma_2, Gamma_4)
+    ell_peak = ell[int(np.argmax(sigma))]
+    assert unstable_band_ell_max(R, Lambda, kappa) >= ell_peak

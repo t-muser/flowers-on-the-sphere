@@ -7,8 +7,8 @@
 #SBATCH --ntasks=16
 #SBATCH --cpus-per-task=1
 #SBATCH --time=01:00:00
-#SBATCH --output=datagen/mickelin/slurm/sweep-%A_%a.out
-#SBATCH --error=datagen/mickelin/slurm/sweep-%A_%a.err
+#SBATCH --output=datagen/mickelin/slurm/logs/sweep-%A_%a.out
+#SBATCH --error=datagen/mickelin/slurm/logs/sweep-%A_%a.err
 #
 # Mickelin GNS parameter sweep: 480 runs at production resolution
 # (Nphi=256, Ntheta=128), 130 τ simulated, snapshot cadence τ/5.

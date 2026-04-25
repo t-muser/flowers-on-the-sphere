@@ -6,9 +6,17 @@ Two public entry points:
   analytic jet profile between ``lat_center - width/2`` and
   ``lat_center + width/2``, reaching peak ``u_max`` at jet center.
 - ``set_initial_conditions(u, h, params, coords, dist, basis, g, R, Omega)`` —
-  set the Dedalus vector field ``u`` to the pure zonal jet, then solve the
-  LBVP for the geostrophically + cyclostrophically balanced height ``h``, then
-  add the Galewsky bi-Gaussian height bump.
+  build a *bi-hemispheric* zonal flow (the canonical northern jet plus a
+  mirrored southern jet at ``-lat_center``), solve for the geostrophically
+  and cyclostrophically balanced height ``h``, then add the Galewsky
+  bi-Gaussian height bump *only on the northern jet*. The asymmetric
+  perturbation makes cross-equatorial Rossby propagation the dominant
+  signal that distinguishes trajectories.
+
+The simulation always runs in the canonical frame (rotation axis = polar
+axis); the per-trajectory SO(3) tilt is applied at postprocess time by
+``datagen.galewsky.scripts.postprocess`` so the Coriolis term in the solver
+stays valid.
 
 Conventions: Dedalus ``S2Coordinates('phi', 'theta')`` uses colatitude
 ``theta ∈ (0, π)`` (0 at the north pole) and longitude ``phi ∈ [0, 2π)``.
@@ -46,6 +54,25 @@ def jet_zonal_profile(
     arg = 1.0 / ((lat[inside] - lat0) * (lat[inside] - lat1))
     u[inside] = (u_max / en) * np.exp(arg)
     return u
+
+
+def two_jet_zonal_profile(
+    lat: np.ndarray,
+    u_max: float,
+    lat_center_deg: float,
+    width_deg: float = 40.0,
+) -> np.ndarray:
+    """Sum of the canonical northern jet at ``+lat_center`` and a mirrored
+    southern jet at ``-lat_center``.
+
+    Both compact-support jets use ``jet_zonal_profile``; their supports are
+    disjoint as long as ``lat_center > width/2`` (true for every grid point
+    in the sweep).
+    """
+    return (
+        jet_zonal_profile(lat, u_max, +lat_center_deg, width_deg=width_deg)
+        + jet_zonal_profile(lat, u_max, -lat_center_deg, width_deg=width_deg)
+    )
 
 
 def height_perturbation(
@@ -102,7 +129,7 @@ def balanced_height_profile(
     LBVP formulation singular.
     """
     lat = np.linspace(-np.pi / 2.0, np.pi / 2.0, n_samples)
-    u = jet_zonal_profile(lat, u_max, lat_center_deg, width_deg=width_deg)
+    u = two_jet_zonal_profile(lat, u_max, lat_center_deg, width_deg=width_deg)
     with np.errstate(divide="ignore", invalid="ignore"):
         integrand = -(1.0 / g) * u * (2.0 * Omega * R * np.sin(lat) + u * np.tan(lat))
     # u vanishes at the poles, so `u * tan(lat)` is 0/0 there; patch NaNs.
@@ -139,12 +166,16 @@ def set_initial_conditions(
     u_max = float(params["u_max"])
     lat_center = float(params["lat_center"])
     h_hat = float(params["h_hat"])
-    lon_c = float(params["lon_c"])
+    # Asymmetric perturbation: pin the bi-Gaussian bump at lon_c=0 in the
+    # canonical frame. The per-trajectory SO(3) rotation applied at
+    # postprocess time supplies the rotational diversity that lon_c used to
+    # provide in the previous (single-jet) sweep.
+    lon_c = 0.0
 
     phi, theta = dist.local_grids(basis)
     lat = np.pi / 2.0 - theta
 
-    u["g"][0] = jet_zonal_profile(lat, u_max, lat_center)
+    u["g"][0] = two_jet_zonal_profile(lat, u_max, lat_center)
     u["g"][1] = 0.0
 
     h_profile = balanced_height_profile(u_max, lat_center, g, R, Omega)

@@ -2,16 +2,17 @@
 #SBATCH --job-name=galewsky-sweep
 #SBATCH --partition=scicore
 #SBATCH --qos=6hours
-#SBATCH --array=0-959
+#SBATCH --array=0-2559
 #SBATCH --nodes=1
 #SBATCH --ntasks=16
 #SBATCH --cpus-per-task=1
 #SBATCH --time=02:00:00
-#SBATCH --output=datagen/galewsky/slurm/sweep-%A_%a.out
-#SBATCH --error=datagen/galewsky/slurm/sweep-%A_%a.err
+#SBATCH --output=datagen/galewsky/slurm/logs/sweep-%A_%a.out
+#SBATCH --error=datagen/galewsky/slurm/logs/sweep-%A_%a.err
 #
-# Full parameter sweep: 1920 runs at production resolution
-# (Nphi=512, Ntheta=256), 6 days simulated, hourly output.
+# Full parameter sweep: 2560 runs at production resolution
+# (Nphi=512, Ntheta=256), 6 days simulated, hourly output. The grid is
+# u_max × lat_center × h_hat × H × seed = 5·4·4·4·8.
 # Each array task: Dedalus solve in job-local scratch, then resample and
 # write the final Zarr directly to the persistent group dataset path.
 #

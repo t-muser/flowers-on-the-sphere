@@ -7,8 +7,8 @@
 #SBATCH --ntasks=8
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:30:00
-#SBATCH --output=datagen/galewsky/slurm/preflight-%A_%a.out
-#SBATCH --error=datagen/galewsky/slurm/preflight-%A_%a.err
+#SBATCH --output=datagen/galewsky/slurm/logs/preflight-%A_%a.out
+#SBATCH --error=datagen/galewsky/slurm/logs/preflight-%A_%a.err
 #
 # Preflight: 32 corners of the 5-axis parameter box at half resolution
 # (Nphi=256, Ntheta=128), 1 day of simulated time. Confirms the whole

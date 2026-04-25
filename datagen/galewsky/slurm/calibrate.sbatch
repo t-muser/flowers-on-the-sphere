@@ -6,14 +6,14 @@
 #SBATCH --ntasks=8
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:30:00
-#SBATCH --output=datagen/galewsky/slurm/calibrate-%j.out
-#SBATCH --error=datagen/galewsky/slurm/calibrate-%j.err
+#SBATCH --output=datagen/galewsky/slurm/logs/calibrate-%j.out
+#SBATCH --error=datagen/galewsky/slurm/logs/calibrate-%j.err
 #
 # Calibration: one preflight corner at full preflight resolution
 # (Nphi=256, Ntheta=128, 1 day simulated) on 8 MPI ranks. Produces a
-# real per-run wall-time data point for budgeting the full 1920-run sweep.
+# real per-run wall-time data point for budgeting the full 2560-run sweep.
 # Picks corner_31 (all-max axis values: u_max=100, lat_center=60, h_hat=240,
-# H=14000, lon_c=300) as the worst-case timing proxy.
+# H=14000, seed=7) as the worst-case timing proxy.
 #
 # Submit from the repo root:
 #   sbatch datagen/galewsky/slurm/calibrate.sbatch

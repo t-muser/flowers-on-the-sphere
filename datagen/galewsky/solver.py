@@ -73,7 +73,6 @@ def _to_sim_params(params: dict) -> dict:
         "u_max":      float(params["u_max"]) * METER / SECOND,
         "h_hat":      float(params["h_hat"]) * METER,
         "lat_center": float(params["lat_center"]),
-        "lon_c":      float(params["lon_c"]),
     }
 
 
@@ -169,12 +168,12 @@ def run_simulation(
     logger.info(
         "Starting run: Nphi=%d Ntheta=%d nu_biharm=%.3e [sim] "
         "(≡ %.3e m²/s Laplacian at ℓ=%d)  "
-        "u_max=%g [m/s] lat_center=%g h_hat=%g [m] H=%g [m] lon_c=%g "
+        "u_max=%g [m/s] lat_center=%g h_hat=%g [m] H=%g [m] "
         "stop_sim_time=%g [s]",
         Nphi, Ntheta, nu, nu_equiv_lap_phys, ELL_MATCH,
         float(params["u_max"]), float(params["lat_center"]),
         float(params["h_hat"]), float(params["H"]),
-        float(params["lon_c"]), stop_sim_time,
+        stop_sim_time,
     )
     wallclock_start = time.time()
     try:

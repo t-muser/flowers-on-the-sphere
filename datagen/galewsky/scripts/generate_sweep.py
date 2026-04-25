@@ -2,8 +2,13 @@
 
 The parameter grid is an explicit tensor product over five axes; runs are
 indexed ``run_0000 … run_NNNN`` in row-major order over the tuple
-``(u_max, lat_center, h_hat, H, lon_c)``. A stable short hash of the tuple is
-stored in every config so downstream code can detect stale caches.
+``(u_max, lat_center, h_hat, H, seed)``. A stable short hash of the tuple
+is stored in every config so downstream code can detect stale caches.
+
+The previous ``lon_c`` axis is gone: each run's per-trajectory SO(3) tilt
+(parameterised by ``seed``) supplies the rotational diversity that lon_c
+used to provide, plus a non-grid-aligned rotation axis so a model can't
+exploit grid alignment as a shortcut.
 
 Run from anywhere — by default the script writes relative to the repo root
 (``configs/`` directory) and does NOT touch the data tree.
@@ -17,17 +22,16 @@ import itertools
 import json
 from pathlib import Path
 
-# Parameter grid (5 · 4 · 4 · 4 · 3 = 960 runs). Keep axes in this order
-# because the run index is computed row-major over them. `lon_c` is the
-# cheap rotational-augmentation axis (the physics is zonally symmetric);
-# it's kept at 3 values to give a model two-rotation generalization
-# samples per physics corner without blowing up the trajectory count.
+# Parameter grid (5 · 4 · 4 · 4 · 8 = 2560 runs). Keep axes in this order
+# because the run index is computed row-major over them. ``seed`` controls
+# both the SO(3) tilt axis/angle (postprocess time) and any other per-run
+# stochastic choices.
 PARAM_GRID: dict[str, tuple[float, ...]] = {
     "u_max": (60.0, 70.0, 80.0, 90.0, 100.0),
     "lat_center": (30.0, 40.0, 50.0, 60.0),
     "h_hat": (60.0, 120.0, 180.0, 240.0),
     "H": (8000.0, 10000.0, 12000.0, 14000.0),
-    "lon_c": (0.0, 120.0, 240.0),
+    "seed": tuple(float(s) for s in range(8)),
 }
 
 
@@ -43,7 +47,9 @@ def iter_grid() -> list[dict]:
     values = [PARAM_GRID[a] for a in axes]
     runs: list[dict] = []
     for combo in itertools.product(*values):
-        params = {a: float(v) for a, v in zip(axes, combo)}
+        params: dict = {}
+        for axis, value in zip(axes, combo):
+            params[axis] = int(value) if axis == "seed" else float(value)
         runs.append(params)
     return runs
 
