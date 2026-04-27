@@ -1,0 +1,25 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# SLURM logs
+slurm/*.out
+slurm/*.err
+datagen/**/slurm/logs/*.out
+datagen/**/slurm/logs/*.err
+
+# Datagen-generated run configs and local data paths
+datagen/**/configs/
+datagen/uv.lock
+data/
+
+runs/
+.claude
+.python_version

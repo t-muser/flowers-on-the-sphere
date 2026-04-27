@@ -42,11 +42,6 @@ PARAM_GRID_MICKELIN: dict[str, tuple[float, ...]] = {
 # Fixed non-dimensional scales shared across the whole sweep.
 R_SPHERE = 1.0
 TAU_TIME = 1.0
-# Rayleigh drag rate. 1% of the unstable-band peak growth rate (1/τ) — small
-# enough to leave the linear instability essentially untouched, large enough
-# to drain the neutral ℓ=1 mode over O(100·τ) and prevent inverse-cascade
-# pile-up at the dipole.
-MU_DRAG = 0.05
 
 
 def _hash_params(params: dict) -> str:
@@ -64,7 +59,6 @@ def _make_params(r_over_lambda: float, kappa_lambda: float, seed: int) -> dict:
         "tau": TAU_TIME,
         "Lambda": Lambda,
         "kappa": kappa,
-        "mu": MU_DRAG,
         "seed": int(seed),
         "r_over_lambda": float(r_over_lambda),
         "kappa_lambda": float(kappa_lambda),

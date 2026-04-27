@@ -52,8 +52,6 @@ def main() -> int:
     ap.add_argument("--ell-init", type=int, default=None,
                     help="Override the default ell_init derived from the unstable band.")
     ap.add_argument("--epsilon", type=float, default=1.0e-3)
-    ap.add_argument("--mu", type=float, default=None,
-                    help="Rayleigh drag rate (defaults to params['mu'], else 0.0).")
     args = ap.parse_args()
 
     _setup_logging()
@@ -70,8 +68,6 @@ def main() -> int:
     if failed_marker.exists():
         failed_marker.unlink()
 
-    mu = args.mu if args.mu is not None else float(params.get("mu", 0.0))
-
     try:
         run_simulation(
             params,
@@ -84,7 +80,6 @@ def main() -> int:
             max_dt=args.max_dt,
             ell_init=args.ell_init,
             epsilon=args.epsilon,
-            mu=mu,
         )
     except Exception as exc:
         log.exception("Simulation failed")

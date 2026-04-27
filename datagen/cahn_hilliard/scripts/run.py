@@ -1,15 +1,15 @@
 """Single-run driver for the Cahn-Hilliard sphere solver.
 
-MPI-aware so SLURM can launch it under ``mpirun -n N`` like the Mickelin /
-Galewsky drivers::
+Mirrors ``datagen.galewsky.scripts.run`` but launches a single FiPy process
+(no MPI) and writes a single HDF5 file rather than a directory of snapshots::
 
-    mpirun -n 16 uv run --project datagen python -m datagen.cahn_hilliard.scripts.run \\
+    uv run --project datagen python -m datagen.cahn_hilliard.scripts.run \\
         --config datagen/cahn_hilliard/configs/run_0000.json \\
         --out-dir $DATA_ROOT/raw/run_0000/
 
 On solver failure, writes ``<out_dir>.FAILED`` with the exception and params
 so that the SLURM array keeps going and ``consolidate.py`` can produce a
-failure report (same marker schema as Galewsky / Mickelin).
+failure report (same marker schema as Galewsky).
 """
 
 from __future__ import annotations
@@ -21,18 +21,15 @@ import sys
 import traceback
 from pathlib import Path
 
-from mpi4py import MPI
-
 from datagen.cahn_hilliard.solver import run_simulation
 
 
 def _setup_logging() -> None:
-    if MPI.COMM_WORLD.rank == 0:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
-            datefmt="%H:%M:%S",
-        )
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
 def main() -> int:
@@ -40,14 +37,13 @@ def main() -> int:
     ap.add_argument("--config", type=Path, required=True,
                     help="Path to the per-run JSON config emitted by generate_sweep.py.")
     ap.add_argument("--out-dir", type=Path, required=True,
-                    help="Directory for the Dedalus HDF5 snapshots.")
-    ap.add_argument("--nphi", type=int, default=256)
-    ap.add_argument("--ntheta", type=int, default=128)
-    ap.add_argument("--burn-in-time", type=float, default=200.0)
-    ap.add_argument("--stop-sim-time", type=float, default=2000.0)
-    ap.add_argument("--snapshot-dt", type=float, default=10.0)
-    ap.add_argument("--initial-dt", type=float, default=1.0e-3)
-    ap.add_argument("--max-dt", type=float, default=0.5)
+                    help="Directory for the FiPy HDF5 snapshot file.")
+    ap.add_argument("--cell-size", type=float, default=0.3,
+                    help="Gmsh target cell size (smaller -> finer mesh).")
+    ap.add_argument("--snapshot-dt", type=float, default=10.0,
+                    help="Solver-time interval between snapshots.")
+    ap.add_argument("--stop-sim-time", type=float, default=630.0)
+    ap.add_argument("--max-dt", type=float, default=100.0)
     args = ap.parse_args()
 
     _setup_logging()
@@ -64,16 +60,15 @@ def main() -> int:
     if failed_marker.exists():
         failed_marker.unlink()
 
+    out_path = out_dir / "cahn_s1.h5"
+
     try:
         run_simulation(
             params,
-            out_dir,
+            out_path,
             snapshot_dt=args.snapshot_dt,
-            burn_in_time=args.burn_in_time,
             stop_sim_time=args.stop_sim_time,
-            Nphi=args.nphi,
-            Ntheta=args.ntheta,
-            initial_dt=args.initial_dt,
+            cell_size=args.cell_size,
             max_dt=args.max_dt,
         )
     except Exception as exc:

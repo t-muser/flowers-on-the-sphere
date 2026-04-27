@@ -51,15 +51,13 @@ def run_simulation(
     max_writes_per_file: int = 250,
     ell_init: int | None = None,
     epsilon: float = 1.0e-3,
-    mu: float = 0.0,
 ) -> None:
     """Run one Mickelin GNS simulation and write HDF5 snapshots.
 
     ``params`` must contain ``R``, ``Lambda``, ``kappa``, ``tau``, ``seed``.
     Snapshot cadence ``snapshot_dt`` and ``stop_sim_time`` are expressed in
-    the same time units as ``tau``. ``mu`` is the Rayleigh-drag rate that
-    drains the neutral ``ℓ=1`` mode and any other long-lived linearly-stable
-    modes. Pass ``ell_init=None`` to derive it from the unstable band.
+    the same time units as ``tau``. Pass ``ell_init=None`` to derive it from
+    the unstable band.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +103,7 @@ def run_simulation(
     problem.add_equation("lap(psi) + tau_psi = -omega")
     problem.add_equation("ave(psi) = 0")
     problem.add_equation(
-        (d3.dt(omega) - L_omega + mu * omega + tau_omega, -u @ d3.grad(omega))
+        (d3.dt(omega) - L_omega + tau_omega, -u @ d3.grad(omega))
     )
     problem.add_equation("ave(omega) = 0")
 
@@ -139,14 +137,11 @@ def run_simulation(
     flow.add_property(np.sqrt(u @ u), name="speed")
     flow.add_property(omega, name="omega")
 
-    peak_rate_drained = (1.0 / tau) - mu
     logger.info(
         "Starting run: Nphi=%d Ntheta=%d R=%g Lambda=%g kappa=%g tau=%g seed=%d "
-        "Gamma_0=%.3e Gamma_2=%.3e Gamma_4=%.3e mu=%.3e ell_init=%d "
-        "peak_growth_post_drag=%.3e stop_sim_time=%g",
+        "Gamma_0=%.3e Gamma_2=%.3e Gamma_4=%.3e stop_sim_time=%g",
         Nphi, Ntheta, R, Lambda, kappa, tau, seed,
-        Gamma_0, Gamma_2, Gamma_4, mu, ell_init,
-        peak_rate_drained, stop_sim_time,
+        Gamma_0, Gamma_2, Gamma_4, stop_sim_time,
     )
     wallclock_start = time.time()
     try:

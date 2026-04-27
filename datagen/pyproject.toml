@@ -6,6 +6,7 @@ readme = "../README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "dedalus>=3.0",
+    "clawpack>=5.10",
     "numpy",
     "scipy",
     "h5py",
@@ -19,6 +20,8 @@ dependencies = [
     "ipykernel>=7.2.0",
     "imageio[ffmpeg]>=2.37.3",
     "cartopy>=0.25.0",
+    "fipy",
+    "gmsh",
 ]
 
 [build-system]
