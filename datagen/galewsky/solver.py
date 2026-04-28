@@ -103,7 +103,7 @@ def _to_sim_params(params: dict) -> dict:
 @dataclass(frozen=True)
 class RunConfig:
     """Run configuration. Time units are in physical seconds."""
-    snapshot_det: float = 3600.0
+    snapshot_dt: float = 3600.0
     stop_sim_time: float = 16 * 86400.0
     Nphi: int = 512
     Ntheta: int = 256
@@ -283,7 +283,7 @@ def run_simulation(
     sim_params = SimulationParams.from_physical(params)
     nu = _hyperviscosity(cfg.Ntheta)
 
-    snapshot_dt_sim = cfg.snapshot_det * SECOND
+    snapshot_dt_sim = cfg.snapshot_dt * SECOND
     stop_sim_time_sim = cfg.stop_sim_time * SECOND
     initial_dt_sim = cfg.initial_dt * SECOND
     max_dt_sim = cfg.max_dt * SECOND
