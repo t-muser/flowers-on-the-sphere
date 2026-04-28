@@ -79,6 +79,15 @@ class SimulationParams:
         )
 
 
+@dataclass(frozen=True)
+class ProblemBundle:
+    """A configured FiPy equation, its primary field, and the mesh."""
+
+    eq: TransientTerm
+    phi: CellVariable
+    mesh: Gmsh2DIn3DSpace
+
+
 # ---------------------------------------------------------------------------
 # Problem assembly
 # ---------------------------------------------------------------------------
