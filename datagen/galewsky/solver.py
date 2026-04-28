@@ -31,6 +31,10 @@ from typing import Any
 
 import numpy as np
 import dedalus.public as d3
+from dedalus.core.basis import SphereBasis
+from dedalus.core.coords import S2Coordinates
+from dedalus.core.distributor import Distributor
+from dedalus.core.problems import InitialValueProblem
 from dedalus.extras import flow_tools
 
 from datagen.galewsky._units import METER, SECOND
@@ -113,7 +117,7 @@ class SimulationParams:
 
 def _build_problem(
         cfg: RunConfig, sim_params: SimulationParams, nu: float
-) -> tuple[d3.IVP, Any, Any, Any, Any]:
+) -> tuple[InitialValueProblem, Any, Any, S2Coordinates, Distributor, SphereBasis]:
     """Construct the Dedalus IVP. Returns (problem, u, h, coords, dist, basis)."""
     coords = d3.S2Coordinates("phi", "theta")
     dist = d3.Distributor(coords, dtype=np.float64)
