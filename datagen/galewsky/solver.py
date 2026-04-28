@@ -176,6 +176,24 @@ def _attach_outputs(
     return handler
 
 
+def _build_cfl(
+        solver, u: VectorField, cfg: RunConfig,
+        initial_dt_sim: float, max_dt_sim: float,
+):
+    cfl = flow_tools.CFL(
+        solver,
+        initial_dt=initial_dt_sim,
+        cadence=10,
+        safety=cfg.cfl_safety,
+        threshold=0.05,
+        max_change=1.5,
+        min_change=0.5,
+        max_dt=max_dt_sim,
+    )
+    cfl.add_velocity(u)
+    return cfl
+
+
 def run_simulation(
         params: dict,
         out_dir: Path,
