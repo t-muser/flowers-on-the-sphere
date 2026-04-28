@@ -38,6 +38,9 @@ from datagen.cahn_hilliard.ic import gaussian_noise_field
 
 logger = logging.getLogger(__name__)
 
+# Operational constants
+_LOG_CADENCE = 50
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -200,6 +203,48 @@ def _log_step(step: int, elapsed: float, dt: float, phi_arr: np.ndarray) -> None
         float(phi_arr.min()),
         float(phi_arr.max()),
     )
+
+
+def _time_loop(
+    eq, phi, cfg: RunConfig, n_cells: int, time_ds: h5py.Dataset, phi_ds: h5py.Dataset
+) -> None:
+    """Main IVP loop with exponentially growing dt and snapshots."""
+
+    def _append_snapshot(t: float) -> None:
+        i = time_ds.shape[0]
+        time_ds.resize((i + 1,))
+        phi_ds.resize((i + 1, n_cells))
+        time_ds[i] = t
+        phi_ds[i, :] = np.asarray(phi.value)
+
+    elapsed = 0.0
+    dexp = float(cfg.initial_dexp)
+    next_snapshot_t = 0.0
+    step = 0
+
+    # Always snapshot t=0 so downstream consumers see the initial state.
+    _append_snapshot(elapsed)
+    next_snapshot_t += cfg.snapshot_dt
+
+    while elapsed < cfg.stop_sim_time:
+        dt = min(cfg.max_dt, math.exp(dexp))
+        # Don't overshoot stop time
+        dt = min(dt, cfg.stop_sim_time - elapsed)
+        eq.solve(var=phi, dt=dt)
+        elapsed += dt
+        dexp += 0.01
+        step += 1
+
+        phi_arr = np.asarray(phi.value)
+        if not np.all(np.isfinite(phi_arr)):
+            raise RuntimeError(f"Non-finite phi at step {step} (t={elapsed:.4g})")
+
+        if elapsed + 1e-12 >= next_snapshot_t:
+            _append_snapshot(elapsed)
+            next_snapshot_t += cfg.snapshot_dt
+
+        if step % _LOG_CADENCE == 0:
+            _log_step(step, elapsed, dt, phi_arr)
 
 
 def run_simulation(
