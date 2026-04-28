@@ -247,14 +247,14 @@ def _time_loop(
             _log_step(step, elapsed, dt, phi_arr)
 
 
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
 def run_simulation(
-    params: dict,
+    params: dict[str, Any],
     out_path: Path,
-    snapshot_dt: float = 10.0,
-    stop_sim_time: float = 500.0,
-    cell_size: float = 0.3,
-    initial_dexp: float = -5.0,
-    max_dt: float = 100.0,
+    config: RunConfig | None = None,
+    **overrides: Any,
 ) -> None:
     """Run one Cahn-Hilliard simulation on the sphere and write a single HDF5 file.
 
@@ -262,61 +262,36 @@ def run_simulation(
     ``seed``, ``radius``. All quantities are dimensionless (the NIST example
     fixes ``D = a = epsilon = 1``); the Zarr ``time`` coordinate downstream
     is in solver time units.
+
+    Args:
+        params: Parameters dict.
+        out_path: Path to the output HDF5 file.
+        config: Numerical and output settings. Defaults to ``RunConfig()`` if ``None``.
+        **overrides: Per-call overrides for individual ``RunConfig`` fields.
+
+    Raises:
+        RuntimeError: If the phi field becomes non-finite during the run.
     """
+    base = config if config is not None else RunConfig()
+    cfg = replace(base, **overrides) if overrides else base
+
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    epsilon = float(params["epsilon"])
-    D = float(params["D"])
-    a = float(params["a"])
-    mean_init = float(params["mean_init"])
-    variance = float(params["variance"])
-    seed = int(params["seed"])
-    radius = float(params["radius"])
+    sim_params = SimulationParams.from_dict(params)
 
-    logger.info(
-        "Building mesh: radius=%g cell_size=%g",
-        radius,
-        cell_size,
-    )
-    mesh = _build_mesh(radius=radius, cell_size=cell_size)
-    n_cells = mesh.numberOfCells
-    cell_xyz = np.asarray(mesh.cellCenters.value).T  # (Ncells, 3)
-    logger.info("Mesh built: %d cells", n_cells)
+    bundle = _build_problem(sim_params, cfg)
+    n_cells = bundle.mesh.numberOfCells
+    cell_xyz = np.asarray(bundle.mesh.cellCenters.value).T  # (Ncells, 3)
 
-    phi = gaussian_noise_field(
-        mesh,
-        mean=mean_init,
-        variance=variance,
-        seed=seed,
-        name="phi",
-    )
-
-    PHI = phi.arithmeticFaceValue
-    eq = TransientTerm() == DiffusionTerm(
-        coeff=D * a**2 * (1.0 - 6.0 * PHI * (1.0 - PHI))
-    ) - DiffusionTerm(coeff=(D, epsilon**2))
-
-    logger.info(
-        "Starting CH solve: epsilon=%g D=%g a=%g mean_init=%g variance=%g "
-        "seed=%d snapshot_dt=%g stop_sim_time=%g max_dt=%g",
-        epsilon,
-        D,
-        a,
-        mean_init,
-        variance,
-        seed,
-        snapshot_dt,
-        stop_sim_time,
-        max_dt,
-    )
+    _log_run_header(cfg, sim_params)
 
     with h5py.File(out_path, mode="w") as f:
         scales = f.create_group("scales")
         tasks = f.create_group("tasks")
 
         scales.create_dataset("cell_xyz", data=cell_xyz)
-        scales.attrs["radius"] = radius
+        scales.attrs["radius"] = sim_params.radius
 
         time_ds = scales.create_dataset(
             "sim_time",
@@ -332,52 +307,9 @@ def run_simulation(
             dtype="float64",
         )
 
-        def _append_snapshot(t: float) -> None:
-            i = time_ds.shape[0]
-            time_ds.resize((i + 1,))
-            phi_ds.resize((i + 1, n_cells))
-            time_ds[i] = t
-            phi_ds[i, :] = np.asarray(phi.value)
-
         wallclock_start = time.time()
-        elapsed = 0.0
-        dexp = float(initial_dexp)
-        next_snapshot_t = 0.0
-        step = 0
-
-        # Always snapshot t=0 so downstream consumers see the initial state.
-        _append_snapshot(elapsed)
-        next_snapshot_t += snapshot_dt
-
         try:
-            while elapsed < stop_sim_time:
-                dt = min(max_dt, math.exp(dexp))
-                # Don't overshoot the stop time.
-                dt = min(dt, stop_sim_time - elapsed)
-                eq.solve(var=phi, dt=dt)
-                elapsed += dt
-                dexp += 0.01
-                step += 1
-
-                phi_arr = np.asarray(phi.value)
-                if not np.all(np.isfinite(phi_arr)):
-                    raise RuntimeError(
-                        f"Non-finite phi at step {step} (t={elapsed:.4g})"
-                    )
-
-                if elapsed + 1.0e-12 >= next_snapshot_t:
-                    _append_snapshot(elapsed)
-                    next_snapshot_t += snapshot_dt
-
-                if step % 50 == 0:
-                    logger.info(
-                        "step=%d t=%.4g dt=%.4g min(phi)=%.4g max(phi)=%.4g",
-                        step,
-                        elapsed,
-                        dt,
-                        float(phi_arr.min()),
-                        float(phi_arr.max()),
-                    )
+            _time_loop(bundle.eq, bundle.phi, cfg, n_cells, time_ds, phi_ds)
         finally:
             logger.info(
                 "Wrote %d snapshots; wallclock %.1f s",
