@@ -137,6 +137,42 @@ def _build_mesh(radius: float, cell_size: float, overlap: int):
     return surface.extrude(extrudeFunc=lambda r: 1.1 * r)
 
 
+def _build_problem(sim_params: SimulationParams, cfg: RunConfig) -> ProblemBundle:
+    """Construct the FiPy equation and initial field."""
+    logger.info(
+        "Building mesh: radius=%g cell_size=%g overlap=%d",
+        sim_params.radius,
+        cfg.cell_size,
+        cfg.mesh_overlap,
+    )
+
+    mesh = _build_mesh(
+        radius=sim_params.radius,
+        cell_size=cfg.cell_size,
+        overlap=cfg.mesh_overlap,
+    )
+    n_cells = mesh.numberOfCells
+    logger.info("Mesh built: %d cells", n_cells)
+
+    phi = gaussian_noise_field(
+        mesh,
+        mean=sim_params.mean_init,
+        variance=sim_params.variance,
+        seed=sim_params.seed,
+        name="phi",
+    )
+    PHI = phi.arithmeticFaceValue
+
+    eq = (
+        TransientTerm()
+        == DiffusionTerm(
+            coeff=sim_params.D * sim_params.a**2 * (1.0 - 6.0 * PHI * (1.0 - PHI))
+        )
+        - DiffusionTerm(coeff=(sim_params.D, sim_params.epsilon**2)),
+    )
+    return ProblemBundle(eq, phi, mesh)
+
+
 def run_simulation(
     params: dict,
     out_path: Path,
