@@ -118,10 +118,10 @@ Surface Loop(100)={{1,t1[0],t2[0],t3[0],t7[0],t4[0],t5[0],t6[0]}};
 """
 
 
-def _build_mesh(radius: float, cell_size: float):
+def _build_mesh(radius: float, cell_size: float, overlap: int):
     """Build the radially-extruded thin-shell mesh used by the CH example."""
     geo = _sphere_geo(radius=radius, cell_size=cell_size)
-    surface = Gmsh2DIn3DSpace(geo)
+    surface = Gmsh2DIn3DSpace(geo, overlap=overlap)
     # Thin radial extrusion: 10% outward bump turns a 2D-in-3D surface into
     # a one-cell-thick shell, which is what the FiPy CH example uses so that
     # face normals are unambiguous.
