@@ -44,9 +44,9 @@ from datagen.galewsky.ic import set_initial_conditions
 # Fixed physics constants, expressed in the solver's sim units. The
 # physical SI values are ``R_earth = 6.37122e6 m``, ``Omega = 7.292e-5 rad/s``,
 # ``g = 9.80616 m/s²``.
-R_EARTH = 6.37122e6 * METER              # = 1.0
-OMEGA   = 7.292e-5 / SECOND              # ≈ 0.2625 rad/sim-hour
-G       = 9.80616 * METER / SECOND ** 2  # ≈ 0.01992 sim-length/sim-time²
+R_EARTH = 6.37122e6 * METER  # = 1.0
+OMEGA = 7.292e-5 / SECOND  # ≈ 0.2625 rad/sim-hour
+G = 9.80616 * METER / SECOND ** 2  # ≈ 0.01992 sim-length/sim-time²
 
 # Hyperviscosity coefficient for the biharmonic operator ``ν·∇⁴``.
 # We match the damping rate of a physical Laplacian viscosity ν_lap = 1e5 m²/s
@@ -60,7 +60,7 @@ G       = 9.80616 * METER / SECOND ** 2  # ≈ 0.01992 sim-length/sim-time²
 # Resolution scaling is ``∝ 1/Ntheta⁴`` because the biharmonic's eigenvalue
 # grows as ℓ⁴ — that keeps the grid-scale damping time invariant as Ntheta
 # changes. At ``Ntheta = NU_REF_NTHETA`` the multiplier is 1.
-NU0_PHYS = 1.0e5                          # [m²/s] — reference Laplacian viscosity
+NU0_PHYS = 1.0e5  # [m²/s] — reference Laplacian viscosity
 ELL_MATCH = 32
 NU_BASE_SIM = (NU0_PHYS * METER ** 2 / SECOND) / (ELL_MATCH ** 2)
 NU_REF_NTHETA = 256
@@ -79,9 +79,9 @@ def _hyperviscosity(Ntheta: int) -> float:
 def _to_sim_params(params: dict) -> dict:
     """Convert a physical-SI parameter dict into a fresh sim-unit dict."""
     return {
-        "H":          float(params["H"])     * METER,
-        "u_max":      float(params["u_max"]) * METER / SECOND,
-        "h_hat":      float(params["h_hat"]) * METER,
+        "H": float(params["H"]) * METER,
+        "u_max": float(params["u_max"]) * METER / SECOND,
+        "h_hat": float(params["h_hat"]) * METER,
         "lat_center": float(params["lat_center"]),
     }
 
@@ -136,7 +136,7 @@ class ProblemBundle:
 
 def _build_problem(
         cfg: RunConfig, sim_params: SimulationParams, nu: float
-) -> tuple[InitialValueProblem, Any, Any, S2Coordinates, Distributor, SphereBasis]:
+) -> ProblemBundle:
     """Construct the Dedalus IVP. Returns (problem, u, h, coords, dist, basis)."""
     coords = d3.S2Coordinates("phi", "theta")
     dist = d3.Distributor(coords, dtype=np.float64)
@@ -159,25 +159,34 @@ def _build_problem(
     )
     problem.add_equation("dt(h) + nu*lap(lap(h)) + H*div(u) = -div(h*u)")
 
-    return problem, u, h, coords, dist, basis
+    bundle = ProblemBundle(problem, u, h, SpectralContext(coords, dist, basis))
+    return bundle
 
 
 def _attach_outputs(
-        solver, u, h, out_dir: Path, snapshot_dt_sim: float, max_writes: int,
+        solver, bundle: ProblemBundle, out_dir: Path, snapshot_dt_sim: float, max_writes: int,
 ):
-    handler
+    """Register HDF5 snapshot outputs (velocity, height, vorticity)."""
+    handler = solver.evaluator.add_file_handler(
+        str(out_dir), sim_dt=snapshot_dt_sim, max_writes=max_writes,
+    )
+    handler.add_task(bundle.u, name="u", layout="g")
+    handler.add_task(bundle.h, name="h", layout="g")
+    handler.add_task(-d3.div(d3.skew(bundle.u)), name="vorticity", layout="g")
+    return handler
+
 
 def run_simulation(
-    params: dict,
-    out_dir: Path,
-    snapshot_dt: float = 3600.0,
-    stop_sim_time: float = 16 * 86400.0,
-    Nphi: int = 512,
-    Ntheta: int = 256,
-    initial_dt: float = 120.0,
-    max_dt: float = 600.0,
-    cfl_safety: float = 0.3,
-    max_writes_per_file: int = 300,
+        params: dict,
+        out_dir: Path,
+        snapshot_dt: float = 3600.0,
+        stop_sim_time: float = 16 * 86400.0,
+        Nphi: int = 512,
+        Ntheta: int = 256,
+        initial_dt: float = 120.0,
+        max_dt: float = 600.0,
+        cfl_safety: float = 0.3,
+        max_writes_per_file: int = 300,
 ) -> None:
     """Run one Galewsky shallow-water simulation and write HDF5 snapshots.
 
