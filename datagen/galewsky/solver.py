@@ -216,6 +216,17 @@ def _log_run_header(
     )
 
 
+def _log_step(solver, dt_sim: float, max_speed_sim: float) -> None:
+    """Log iteration index, sim time (days), step size, and max |u| (physical units)."""
+    logger.info(
+        "it=%d t=%.3g d dt=%.3g s max|u|=%.3g m/s",
+        solver.iteration,
+        solver.sim_time / SECOND / 86400.0,
+        dt_sim / SECOND,
+        max_speed_sim / (METER / SECOND),
+    )
+
+
 def run_simulation(
         params: dict,
         out_dir: Path,
