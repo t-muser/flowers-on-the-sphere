@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import dedalus.public as d3
@@ -74,6 +76,39 @@ def _to_sim_params(params: dict) -> dict:
         "h_hat":      float(params["h_hat"]) * METER,
         "lat_center": float(params["lat_center"]),
     }
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    """Run configuration. Time units are in physical seconds."""
+    snapshot_det: float = 3600.0
+    stop_sim_time: float = 16 * 86400.0
+    Nphi: int = 512
+    Ntheta: int = 256
+    initial_dt: float = 120.0
+    max_dt: float = 600.0
+    cfl_safety: float = 0.3
+    max_writes_per_file: int = 300
+    log_cadence: int = 100
+    monitor_cadence: int = 50
+
+
+@dataclass(frozen=True)
+class SimulationParams:
+    """Parameters of the Galewski simulation in sim units, built from a physical-SI dict."""
+    H: float  # Mean depth [sim length]
+    u_max: float  # Jet peak speed [sim length/sim time]
+    h_hat: float  # Perturbation amplitude [sim length]
+    lat_center: float  # Jet center latitude [sim rad]
+
+    @classmethod
+    def from_physical(cls, params: dict[str, Any]) -> "SimulationParams":
+        return cls(
+            H=float(params["H"]) * METER,
+            u_max=float(params["u_max"]) * METER / SECOND,
+            h_hat=float(params["h_hat"]) * METER,
+            lat_center=float(params["lat_center"]),
+        )
 
 
 def run_simulation(
