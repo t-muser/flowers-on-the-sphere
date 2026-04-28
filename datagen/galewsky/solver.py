@@ -41,39 +41,45 @@ from dedalus.extras import flow_tools
 from datagen.galewsky._units import METER, SECOND
 from datagen.galewsky.ic import set_initial_conditions
 
-# Fixed physics constants, expressed in the solver's sim units. The
-# physical SI values are ``R_earth = 6.37122e6 m``, ``Omega = 7.292e-5 rad/s``,
-# ``g = 9.80616 m/s²``.
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Physical constants (Earth, in sim units)
+# ---------------------------------------------------------------------------
+# Physical SI values: R_earth = 6.37122e6 m, Omega = 7.292e-5 rad/s,
+# g = 9.80616 m/s². In sim units: R_EARTH = 1, 1 time unit = 1 hour.
 R_EARTH = 6.37122e6 * METER  # = 1.0
 OMEGA = 7.292e-5 / SECOND  # ≈ 0.2625 rad/sim-hour
 G = 9.80616 * METER / SECOND ** 2  # ≈ 0.01992 sim-length/sim-time²
 
-# Hyperviscosity coefficient for the biharmonic operator ``ν·∇⁴``.
-# We match the damping rate of a physical Laplacian viscosity ν_lap = 1e5 m²/s
-# at spherical harmonic degree ``ELL_MATCH = 32`` (the Dedalus shallow-water
-# example's reference). Matching
-#     ν_lap · ℓ(ℓ+1)/R²  =  ν_bi · [ℓ(ℓ+1)/R²]²
-# gives  ν_bi = ν_lap · R²/ℓ²  at the match degree, in physical m⁴/s.
-# Converting to sim units and absorbing R = 1:
-#     NU_BASE_SIM = ν_lap · METER²/SECOND / ELL_MATCH²
+# ---------------------------------------------------------------------------
+# Hyperviscosity calibration
+# ---------------------------------------------------------------------------
+# Calibration follows the canonical Dedalus shallow-water example. Match the
+# biharmonic damping rate ν_bi·[ℓ(ℓ+1)/R²]² to a reference Laplacian rate
+# ν_lap·ℓ(ℓ+1)/R² at a single chosen degree ELL_MATCH. Solving (using
+# ℓ(ℓ+1) ≈ ℓ² at large ℓ, as upstream does):
 #
-# Resolution scaling is ``∝ 1/Ntheta⁴`` because the biharmonic's eigenvalue
-# grows as ℓ⁴ — that keeps the grid-scale damping time invariant as Ntheta
-# changes. At ``Ntheta = NU_REF_NTHETA`` the multiplier is 1.
-NU0_PHYS = 1.0e5  # [m²/s] — reference Laplacian viscosity
-ELL_MATCH = 32
-NU_BASE_SIM = (NU0_PHYS * METER ** 2 / SECOND) / (ELL_MATCH ** 2)
-NU_REF_NTHETA = 256
+#     ν_bi(ref) = ν_lap · R² / ELL_MATCH²
+#
+# This fixes ν_bi at the reference resolution NU_REF_NTHETA. At other
+# resolutions we scale ν_bi ∝ 1/Ntheta⁴ so the grid-scale damping time
+# stays invariant under refinement (DNS-style sweep convention; this is NOT
+# a ν→0 convergence study). With R_EARTH = 1 in sim units the R² factor
+# disappears.
+NU0_PHYS_LAP = 1.0e5  # [m²/s] reference Laplacian viscosity
+ELL_MATCH = 32  # calibration degree
+NU_REF_NTHETA = 256  # resolution at which ν_bi(ref) applies
+NU_BI_REF_SIM = (NU0_PHYS_LAP * METER ** 2 / SECOND) / ELL_MATCH ** 2
 
+# Operational constants
 _LOG_CADENCE = 100
 _MONITOR_CADENCE = 50
-
-logger = logging.getLogger(__name__)
 
 
 def _hyperviscosity(Ntheta: int) -> float:
     """Hyperviscosity (sim units) for the biharmonic operator."""
-    return NU_BASE_SIM * (NU_REF_NTHETA / Ntheta) ** 4
+    return NU_BI_REF_SIM * (NU_REF_NTHETA / Ntheta) ** 4
 
 
 def _equivalent_lap_viscosity_phys(nu_bi_sim: float) -> float:
@@ -81,6 +87,9 @@ def _equivalent_lap_viscosity_phys(nu_bi_sim: float) -> float:
     return nu_bi_sim * ELL_MATCH ** 2 * SECOND / METER ** 2
 
 
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 def _to_sim_params(params: dict) -> dict:
     """Convert a physical-SI parameter dict into a fresh sim-unit dict."""
     return {
@@ -139,13 +148,16 @@ class ProblemBundle:
     ctx: SpectralContext
 
 
+# ---------------------------------------------------------------------------
+# Problem assembly
+# ---------------------------------------------------------------------------
 def _build_problem(
         cfg: RunConfig, sim_params: SimulationParams, nu: float
 ) -> ProblemBundle:
     """Construct the Dedalus IVP. Returns (problem, u, h, coords, dist, basis)."""
     coords = d3.S2Coordinates("phi", "theta")
     dist = d3.Distributor(coords, dtype=np.float64)
-    basis = d3.SphereBasis(coords, (cfg.Nphi, cfg.Ntheta), radius=R_EARTH)
+    basis = d3.SphereBasis(coords, (cfg.Nphi, cfg.Ntheta), radius=R_EARTH, dealias=3 / 2, dtype=np.float64)
 
     u = dist.VectorField(coords, name="u", bases=basis)
     h = dist.Field(name="h", bases=basis)
@@ -241,6 +253,9 @@ def _time_loop(solver, cfl, flow) -> None:
             _log_step(solver, dt, max_speed_sim)
 
 
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
 def run_simulation(
         params: dict[str, Any],
         out_dir: Path,
