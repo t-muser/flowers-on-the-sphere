@@ -166,13 +166,9 @@ def _build_problem(sim_params: SimulationParams, cfg: RunConfig) -> ProblemBundl
     )
     PHI = phi.arithmeticFaceValue
 
-    eq = (
-        TransientTerm()
-        == DiffusionTerm(
-            coeff=sim_params.D * sim_params.a**2 * (1.0 - 6.0 * PHI * (1.0 - PHI))
-        )
-        - DiffusionTerm(coeff=(sim_params.D, sim_params.epsilon**2)),
-    )
+    eq = TransientTerm() == DiffusionTerm(
+        coeff=sim_params.D * sim_params.a**2 * (1.0 - 6.0 * PHI * (1.0 - PHI))
+    ) - DiffusionTerm(coeff=(sim_params.D, sim_params.epsilon**2))
     return ProblemBundle(eq, phi, mesh)
 
 
