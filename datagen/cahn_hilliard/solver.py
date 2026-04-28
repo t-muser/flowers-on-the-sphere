@@ -190,6 +190,18 @@ def _log_run_header(cfg: RunConfig, params: SimulationParams) -> None:
     )
 
 
+def _log_step(step: int, elapsed: float, dt: float, phi_arr: np.ndarray) -> None:
+    """Log iteration index, sim time, step size, and bounds."""
+    logger.info(
+        "step=%d t=%.4g dt=%.4g min(phi)=%.4g max(phi)=%.4g",
+        step,
+        elapsed,
+        dt,
+        float(phi_arr.min()),
+        float(phi_arr.max()),
+    )
+
+
 def run_simulation(
     params: dict,
     out_path: Path,
