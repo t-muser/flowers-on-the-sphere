@@ -90,16 +90,6 @@ def _equivalent_lap_viscosity_phys(nu_bi_sim: float) -> float:
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-def _to_sim_params(params: dict) -> dict:
-    """Convert a physical-SI parameter dict into a fresh sim-unit dict."""
-    return {
-        "H": float(params["H"]) * METER,
-        "u_max": float(params["u_max"]) * METER / SECOND,
-        "h_hat": float(params["h_hat"]) * METER,
-        "lat_center": float(params["lat_center"]),
-    }
-
-
 @dataclass(frozen=True)
 class RunConfig:
     """Run configuration. Time units are in physical seconds."""
