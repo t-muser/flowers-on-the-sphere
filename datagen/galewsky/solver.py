@@ -76,6 +76,11 @@ def _hyperviscosity(Ntheta: int) -> float:
     return NU_BASE_SIM * (NU_REF_NTHETA / Ntheta) ** 4
 
 
+def _equivalent_lap_viscosity_phys(nu_bi_sim: float) -> float:
+    """Physical Laplacian viscosity (m²/s) matched to ν_bi at ELL_MATCH."""
+    return nu_bi_sim * ELL_MATCH ** 2 * SECOND / METER ** 2
+
+
 def _to_sim_params(params: dict) -> dict:
     """Convert a physical-SI parameter dict into a fresh sim-unit dict."""
     return {
@@ -192,6 +197,23 @@ def _build_cfl(
     )
     cfl.add_velocity(u)
     return cfl
+
+
+def _log_run_header(
+        cfg: RunConfig, params: dict[str, Any], nu: float, stop_sim_time: float,
+) -> None:
+    """Log resolution, hyperviscosity and Galewsky parameters in physical units."""
+    logger.info(
+        "Starting run: Nphi=%d Ntheta=%d nu_biharm=%.3e [sim] "
+        "(≡ %.3e m²/s Laplacian at ℓ=%d) "
+        "u_max=%g [m/s] lat_center=%g h_hat=%g [m] H=%g [m] "
+        "stop_sim_time=%g [s]",
+        cfg.Nphi, cfg.Ntheta, nu,
+        _equivalent_lap_viscosity_phys(nu), ELL_MATCH,
+        float(params["u_max"]), float(params["lat_center"]),
+        float(params["h_hat"]), float(params["H"]),
+        stop_sim_time,
+    )
 
 
 def run_simulation(
