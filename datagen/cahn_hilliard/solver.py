@@ -49,6 +49,7 @@ class RunConfig:
     snapshot_dt: float = 10.0
     stop_sim_time: float = 500.0
     cell_size: float = 0.3
+    mesh_overlap: int = 2
     initial_dexp: float = -5.0
     max_dt: float = 100.0
 
@@ -78,6 +79,9 @@ class SimulationParams:
         )
 
 
+# ---------------------------------------------------------------------------
+# Problem assembly
+# ---------------------------------------------------------------------------
 def _sphere_geo(radius: float, cell_size: float) -> str:
     """Gmsh geometry string for a unit-radius spherical surface mesh.
 
