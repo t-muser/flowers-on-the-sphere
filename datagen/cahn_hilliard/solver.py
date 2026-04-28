@@ -21,7 +21,9 @@ from __future__ import annotations
 import logging
 import math
 import time
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any
 
 import h5py
 import numpy as np
@@ -35,6 +37,45 @@ from fipy import (
 from datagen.cahn_hilliard.ic import gaussian_noise_field
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class RunConfig:
+    """Run configuration."""
+
+    snapshot_dt: float = 10.0
+    stop_sim_time: float = 500.0
+    cell_size: float = 0.3
+    initial_dexp: float = -5.0
+    max_dt: float = 100.0
+
+
+@dataclass(frozen=True)
+class SimulationParams:
+    """Parameters of the Cahn-Hilliard simulation."""
+
+    epsilon: float
+    D: float
+    a: float
+    mean_init: float
+    variance: float
+    seed: int
+    radius: float
+
+    @classmethod
+    def from_dict(cls, params: dict[str, Any]) -> SimulationParams:
+        return cls(
+            epsilon=float(params["epsilon"]),
+            D=float(params["D"]),
+            a=float(params["a"]),
+            mean_init=float(params["mean_init"]),
+            variance=float(params["variance"]),
+            seed=int(params["seed"]),
+            radius=float(params["radius"]),
+        )
 
 
 def _sphere_geo(radius: float, cell_size: float) -> str:
@@ -111,7 +152,9 @@ def run_simulation(
     radius = float(params["radius"])
 
     logger.info(
-        "Building mesh: radius=%g cell_size=%g", radius, cell_size,
+        "Building mesh: radius=%g cell_size=%g",
+        radius,
+        cell_size,
     )
     mesh = _build_mesh(radius=radius, cell_size=cell_size)
     n_cells = mesh.numberOfCells
@@ -119,21 +162,30 @@ def run_simulation(
     logger.info("Mesh built: %d cells", n_cells)
 
     phi = gaussian_noise_field(
-        mesh, mean=mean_init, variance=variance, seed=seed, name="phi",
+        mesh,
+        mean=mean_init,
+        variance=variance,
+        seed=seed,
+        name="phi",
     )
 
     PHI = phi.arithmeticFaceValue
-    eq = (
-        TransientTerm()
-        == DiffusionTerm(coeff=D * a ** 2 * (1.0 - 6.0 * PHI * (1.0 - PHI)))
-        - DiffusionTerm(coeff=(D, epsilon ** 2))
-    )
+    eq = TransientTerm() == DiffusionTerm(
+        coeff=D * a**2 * (1.0 - 6.0 * PHI * (1.0 - PHI))
+    ) - DiffusionTerm(coeff=(D, epsilon**2))
 
     logger.info(
         "Starting CH solve: epsilon=%g D=%g a=%g mean_init=%g variance=%g "
         "seed=%d snapshot_dt=%g stop_sim_time=%g max_dt=%g",
-        epsilon, D, a, mean_init, variance, seed,
-        snapshot_dt, stop_sim_time, max_dt,
+        epsilon,
+        D,
+        a,
+        mean_init,
+        variance,
+        seed,
+        snapshot_dt,
+        stop_sim_time,
+        max_dt,
     )
 
     with h5py.File(out_path, mode="w") as f:
@@ -144,7 +196,10 @@ def run_simulation(
         scales.attrs["radius"] = radius
 
         time_ds = scales.create_dataset(
-            "sim_time", shape=(0,), maxshape=(None,), dtype="float64",
+            "sim_time",
+            shape=(0,),
+            maxshape=(None,),
+            dtype="float64",
         )
         phi_ds = tasks.create_dataset(
             "phi",
@@ -194,10 +249,15 @@ def run_simulation(
                 if step % 50 == 0:
                     logger.info(
                         "step=%d t=%.4g dt=%.4g min(phi)=%.4g max(phi)=%.4g",
-                        step, elapsed, dt, float(phi_arr.min()), float(phi_arr.max()),
+                        step,
+                        elapsed,
+                        dt,
+                        float(phi_arr.min()),
+                        float(phi_arr.max()),
                     )
         finally:
             logger.info(
                 "Wrote %d snapshots; wallclock %.1f s",
-                time_ds.shape[0], time.time() - wallclock_start,
+                time_ds.shape[0],
+                time.time() - wallclock_start,
             )
