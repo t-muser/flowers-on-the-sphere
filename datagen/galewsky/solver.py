@@ -202,7 +202,7 @@ def _build_cfl(
 def _log_run_header(
         cfg: RunConfig, params: dict[str, Any], nu: float, stop_sim_time: float,
 ) -> None:
-    """Log resolution, hyperviscosity and Galewsky parameters in physical units."""
+    """Log resolution, hyperviscosity, and Galewsky parameters in physical units."""
     logger.info(
         "Starting run: Nphi=%d Ntheta=%d nu_biharm=%.3e [sim] "
         "(≡ %.3e m²/s Laplacian at ℓ=%d) "
@@ -225,6 +225,20 @@ def _log_step(solver, dt_sim: float, max_speed_sim: float) -> None:
         dt_sim / SECOND,
         max_speed_sim / (METER / SECOND),
     )
+
+
+def _time_loop(solver, cfl, flow) -> None:
+    """Main IVP loop with CFL-adaptive stepping and periodic logging."""
+    while solver.proceed:
+        dt = cfl.compute_timestep()
+        solver.step(dt)
+        if solver.iteration % _LOG_CADENCE == 0:
+            max_speed_sim = flow.max("speed")
+            if not np.isfinite(max_speed_sim):
+                raise RuntimeError(
+                    f"Non-finite velocity at iteration {solver.iteration}"
+                )
+            _log_step(solver, dt, max_speed_sim)
 
 
 def run_simulation(
