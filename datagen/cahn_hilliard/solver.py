@@ -173,6 +173,23 @@ def _build_problem(sim_params: SimulationParams, cfg: RunConfig) -> ProblemBundl
     return ProblemBundle(eq, phi, mesh)
 
 
+def _log_run_header(cfg: RunConfig, params: SimulationParams) -> None:
+    """Log the initial configuration details."""
+    logger.info(
+        "Starting CH solve: epsilon=%g D=%g a=%g mean_init=%g variance=%g "
+        "seed=%d snapshot_dt=%g stop_sim_time=%g max_dt=%g",
+        params.epsilon,
+        params.D,
+        params.a,
+        params.mean_init,
+        params.variance,
+        params.seed,
+        cfg.snapshot_dt,
+        cfg.stop_sim_time,
+        cfg.max_dt,
+    )
+
+
 def run_simulation(
     params: dict,
     out_path: Path,
