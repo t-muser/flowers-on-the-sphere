@@ -52,7 +52,7 @@ class RunConfig:
     snapshot_dt: float = 10.0
     stop_sim_time: float = 500.0
     cell_size: float = 0.3
-    mesh_overlap: int = 2
+    mesh_overlap: int = 1
     initial_dexp: float = -5.0
     max_dt: float = 100.0
 
