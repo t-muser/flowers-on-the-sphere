@@ -111,6 +111,33 @@ class SimulationParams:
         )
 
 
+def _build_problem(
+        cfg: RunConfig, sim_params: SimulationParams, nu: float
+) -> tuple[d3.IVP, Any, Any, Any, Any]:
+    """Construct the Dedalus IVP. Returns (problem, u, h, coords, dist, basis)."""
+    coords = d3.S2Coordinates("phi", "theta")
+    dist = d3.Distributor(coords, dtype=np.float64)
+    basis = d3.SphereBasis(coords, (cfg.Nphi, cfg.Ntheta), radius=R_EARTH)
+
+    u = dist.VectorField(coords, name="u", bases=basis)
+    h = dist.Field(name="h", bases=basis)
+
+    def zcross(A):
+        return d3.MulCosine(d3.skew(A))
+
+    H = sim_params.H
+    g = G
+    Omega = OMEGA
+    _ = (zcross, H, g, Omega, nu)
+
+    problem = d3.IVP(variables=[u, h], namespace=locals())
+    problem.add_equation(
+        "dt(u) + nu*lap(lap(u)) + g*grad(h) + 2*Omega*zcross(u) = -u@grad(u)"
+    )
+    problem.add_equation("dt(h) + nu*lap(lap(h)) + H*div(u) = -div(h*u)")
+
+    return problem, u, h, coords, dist, basis
+
 def run_simulation(
     params: dict,
     out_dir: Path,
