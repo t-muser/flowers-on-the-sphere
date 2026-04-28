@@ -34,6 +34,7 @@ import dedalus.public as d3
 from dedalus.core.basis import SphereBasis
 from dedalus.core.coords import S2Coordinates
 from dedalus.core.distributor import Distributor
+from dedalus.core.field import Field, VectorField
 from dedalus.core.problems import InitialValueProblem
 from dedalus.extras import flow_tools
 
@@ -64,6 +65,9 @@ ELL_MATCH = 32
 NU_BASE_SIM = (NU0_PHYS * METER ** 2 / SECOND) / (ELL_MATCH ** 2)
 NU_REF_NTHETA = 256
 
+_LOG_CADENCE = 100
+_MONITOR_CADENCE = 50
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,8 +97,6 @@ class RunConfig:
     max_dt: float = 600.0
     cfl_safety: float = 0.3
     max_writes_per_file: int = 300
-    log_cadence: int = 100
-    monitor_cadence: int = 50
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,23 @@ class SimulationParams:
             h_hat=float(params["h_hat"]) * METER,
             lat_center=float(params["lat_center"]),
         )
+
+
+@dataclass(frozen=True)
+class SpectralContext:
+    """Spectral discretization objects (shared across helpers)."""
+    coords: S2Coordinates
+    dist: Distributor
+    basis: SphereBasis
+
+
+@dataclass(frozen=True)
+class ProblemBundle:
+    """A configured Dedalus IVP, plus its primary fields and discretization."""
+    problem: InitialValueProblem
+    u: VectorField
+    h: Field
+    ctx: SpectralContext
 
 
 def _build_problem(
@@ -141,6 +160,12 @@ def _build_problem(
     problem.add_equation("dt(h) + nu*lap(lap(h)) + H*div(u) = -div(h*u)")
 
     return problem, u, h, coords, dist, basis
+
+
+def _attach_outputs(
+        solver, u, h, out_dir: Path, snapshot_dt_sim: float, max_writes: int,
+):
+    handler
 
 def run_simulation(
     params: dict,
