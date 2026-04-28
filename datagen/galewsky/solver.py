@@ -265,7 +265,7 @@ def run_simulation(
     """Run one Galewsky shallow-water simulation and write HDF5 snapshots.
 
     Args:
-        params: Parameters dict (``H``, ``u_max``, ``h_lat``, ``lat_center``) in physical SI units
+        params: Parameters dict (``H``, ``u_max``, ``h_hat``, ``lat_center``) in physical SI units
         out_dir: Directory for HDF5 snapshot output. Created if missing.
         config: Numerical and output settings (resolution, time stepping,
             snapshot cadence). Defaults to ``RunConfig()`` if ``None``.
