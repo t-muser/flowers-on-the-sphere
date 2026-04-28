@@ -1,12 +1,12 @@
 # Zinnia — Legendre–Gauss internal grid with SHT boundary resampling,
 # tangent warp. Python grid_sample path throughout (no CUDA kernel dep).
 model:
-  _target_: flowers.zinnia.Zinnia
-  lifting_dim: 384
+  _target_: fots.models.flowers.zinnia.Zinnia
+  lifting_dim: 150
   n_levels: 4
   channel_multipliers: [1, 2, 4, 8]
-  num_heads: 128
-  groups: 32
+  num_heads: 50
+  groups: 50
   dropout_rate: 0.0
   coord_dim: 3
   # Internal LG grid params (null => defaults: H_lg = H_eq - 1 if odd, else H_eq).

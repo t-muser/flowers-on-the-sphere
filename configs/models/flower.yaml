@@ -1,0 +1,13 @@
+# Flower — U-Net with FiLM-conditioned SelfWarp blocks on a flat lat/lon
+# grid. Self-contained implementation in flowers/flower.py (originally the
+# warpspeed standalone copy). Boundary conditions default to zeros along
+# latitude (poles aren't periodic — treat as OOB) and periodic along
+# longitude.
+model:
+  _target_: fots.models.flowers.flower.Flower2D
+  lifting_dim: 160
+  n_levels: 4
+  num_heads: 40
+  groups: 40
+  dropout_rate: 0.0
+  boundary_condition_types: ["ZEROS", "PERIODIC"]

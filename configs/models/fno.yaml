@@ -1,0 +1,16 @@
+# FNO derived from SFNO by swapping spherical harmonic transforms for 2D
+# FFTs on the periodic domain (RealFFT2 / InverseRealFFT2 wrappers from
+# torch_harmonics.examples.models._layers). Same hyperparams as
+# configs/models/sfno.yaml so the SFNO/FNO comparison is apples-to-apples.
+model:
+  _target_: fots.models.baselines.sphere_models.Fno
+  embed_dim: 192
+  num_layers: 4
+  scale_factor: 2
+  mlp_ratio: 2.0
+  hard_thresholding_fraction: 0.5
+  use_mlp: true
+  normalization_layer: instance_norm
+  residual_prediction: false
+  pos_embed: none
+  activation_function: gelu

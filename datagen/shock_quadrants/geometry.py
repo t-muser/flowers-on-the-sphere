@@ -96,6 +96,31 @@ def cell_centers_latlon(
     return lat, lon
 
 
+def subcell_centers_latlon(
+    Nx: int, Ny: int, xlower: float, ylower: float, dx: float, dy: float,
+    sub_samples: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per-cell sub-sample ``(lat, lon)`` of shape ``(Nx, Ny, S, S)``.
+
+    Each cell is split into ``S × S`` uniformly-placed sub-points in
+    computational ``(X, Y)`` (offsets ``(a + 0.5) / S`` for ``a = 0..S-1``).
+    Sub-points are mapped through ``mapc2p_sphere`` and converted to
+    ``(lat, lon)`` in radians. Used by IC fillers to anti-alias hard-
+    bordered piecewise-constant ICs: every cell is classified at all S²
+    sub-points and the conserved-variable cell average replaces the
+    cell-centre staircase.
+    """
+    S = int(sub_samples)
+    sub = (np.arange(S) + 0.5) / S
+    xc_1d = xlower + (np.add.outer(np.arange(Nx), sub).ravel()) * dx
+    yc_1d = ylower + (np.add.outer(np.arange(Ny), sub).ravel()) * dy
+    XC, YC = np.meshgrid(xc_1d, yc_1d, indexing="ij")
+    xp, yp, zp = mapc2p_sphere(XC.copy(), YC.copy())
+    lat = np.arcsin(np.clip(zp, -1.0, 1.0)).reshape(Nx, S, Ny, S).transpose(0, 2, 1, 3)
+    lon = np.mod(np.arctan2(yp, xp), 2.0 * np.pi).reshape(Nx, S, Ny, S).transpose(0, 2, 1, 3)
+    return lat, lon
+
+
 # ---------------------------------------------------------------------------
 # Aux-array setup (wraps Fortran setaux)
 # ---------------------------------------------------------------------------

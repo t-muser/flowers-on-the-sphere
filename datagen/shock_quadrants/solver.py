@@ -179,10 +179,23 @@ def _build_state(Nx: int, Ny: int, num_ghost: int = 2):
 # Cell-centre → regular (lat, lon) nearest-neighbour gather
 # ---------------------------------------------------------------------------
 
-def _build_target_xyz(Nlat: int, Nlon: int) -> np.ndarray:
-    lat = -np.pi / 2.0 + (np.arange(Nlat) + 0.5) * np.pi / Nlat
-    lon = np.arange(Nlon) * 2.0 * np.pi / Nlon
-    lat_g, lon_g = np.meshgrid(lat, lon, indexing="ij")
+def _build_target_xyz(Nlat: int, Nlon: int, oversample: int = 1) -> np.ndarray:
+    """Target ``(x, y, z)`` points for the NN gather, optionally super-sampled.
+
+    Each output cell ``(k, l)`` is sub-sampled at ``oversample × oversample``
+    sub-points in ``(lat, lon)``; ``_record_snapshot`` averages NN-gathered
+    source values across the sub-points to anti-alias sharp shock fronts.
+    Returns shape ``(Nlat * S * Nlon * S, 3)`` in row-major
+    ``(lat, lat_sub, lon, lon_sub)`` order.
+    """
+    S = int(oversample)
+    sub = (np.arange(S) + 0.5) / S
+    lat_idx = np.arange(Nlat)[:, None] + sub[None, :]   # (Nlat, S)
+    lon_idx = np.arange(Nlon)[:, None] + sub[None, :]   # (Nlon, S)
+    lat = -np.pi / 2.0 + lat_idx * np.pi / Nlat
+    lon = lon_idx * 2.0 * np.pi / Nlon
+    lat_g = np.broadcast_to(lat[:, :, None, None], (Nlat, S, Nlon, S))
+    lon_g = np.broadcast_to(lon[None, None, :, :], (Nlat, S, Nlon, S))
     cos_lat = np.cos(lat_g)
     return np.stack(
         [cos_lat * np.cos(lon_g), cos_lat * np.sin(lon_g), np.sin(lat_g)],
@@ -213,6 +226,7 @@ def run_simulation(
     stop_sim_time: float = 1.5,
     cfl_desired: float = 0.45,
     cfl_max: float = 0.9,
+    sub_samples: int = 4,
 ) -> Dict:
     """Run one shallow-water shock-quadrant simulation.
 
@@ -230,9 +244,9 @@ def run_simulation(
     axis, angle = rotation_from_seed(seed)
     logger.info(
         "Starting run: seed=%d axis=%s angle=%.6f rad "
-        "Nx=%d Ny=%d Nlat=%d Nlon=%d stop_sim_time=%g snapshot_dt=%g",
+        "Nx=%d Ny=%d Nlat=%d Nlon=%d stop_sim_time=%g snapshot_dt=%g sub_samples=%d",
         seed, axis.tolist(), angle, Nx, Ny, Nlat, Nlon,
-        stop_sim_time, snapshot_dt,
+        stop_sim_time, snapshot_dt, sub_samples,
     )
 
     t0 = time.time()
@@ -266,8 +280,10 @@ def run_simulation(
         seed=seed,
         lat_centers=lat_cell,
         lon_centers=lon_cell,
+        xlower=xlower, ylower=ylower, dx=dx, dy=dy,
         axis=axis,
         angle=angle,
+        sub_samples=sub_samples,
     )
     state.q[0, ...] = h0
     state.q[1, ...] = momx0
@@ -276,12 +292,13 @@ def run_simulation(
     logger.info("Filled IC in %.2fs", time.time() - t0)
 
     t0 = time.time()
-    pts_xyz_target = _build_target_xyz(Nlat, Nlon)
+    pts_xyz_target = _build_target_xyz(Nlat, Nlon, oversample=sub_samples)
     tree = cKDTree(pts_xyz_src)
     _, nn_indices = tree.query(pts_xyz_target, k=1)
     logger.info(
-        "Built cKDTree NN map (%d src, %d tgt) in %.2fs",
-        pts_xyz_src.shape[0], pts_xyz_target.shape[0], time.time() - t0,
+        "Built cKDTree NN map (%d src, %d tgt @ oversample=%d) in %.2fs",
+        pts_xyz_src.shape[0], pts_xyz_target.shape[0], sub_samples,
+        time.time() - t0,
     )
 
     Nt = int(round(stop_sim_time / snapshot_dt)) + 1
@@ -289,13 +306,19 @@ def run_simulation(
     fields = np.empty((Nt, 3, Nlat, Nlon), dtype=np.float32)
 
     t0 = time.time()
-    _record_snapshot(fields, 0, state, lat_cell, lon_cell, Nx, Ny, Nlat, Nlon, nn_indices)
+    _record_snapshot(
+        fields, 0, state, lat_cell, lon_cell, Nx, Ny, Nlat, Nlon,
+        nn_indices, oversample=sub_samples,
+    )
     logger.info("Recorded t=0 snapshot in %.2fs; entering time loop.", time.time() - t0)
 
     wallclock_start = time.time()
     for k, t_target in enumerate(snapshot_times[1:], start=1):
         solver.evolve_to_time(solution, t_target)
-        _record_snapshot(fields, k, state, lat_cell, lon_cell, Nx, Ny, Nlat, Nlon, nn_indices)
+        _record_snapshot(
+            fields, k, state, lat_cell, lon_cell, Nx, Ny, Nlat, Nlon,
+            nn_indices, oversample=sub_samples,
+        )
         logger.info(
             "snapshot %3d / %d (t=%.4f) wallclock=%.1fs",
             k, Nt - 1, t_target, time.time() - wallclock_start,
@@ -322,11 +345,15 @@ def _record_snapshot(
     Nlat: int,
     Nlon: int,
     nn_indices: np.ndarray,
+    oversample: int = 1,
 ) -> None:
     """Project the current PyClaw state onto the regular lat/lon grid.
 
     ``state.q`` carries ``(h, h·ux, h·uy, h·uz)`` in 3-D Cartesian.
     The momentum components are projected to local east/north for output.
+    With ``oversample > 1`` each output cell averages an ``S × S`` block
+    of NN-gathered source values — the antialiasing fix for sharp shock
+    fronts crossing the lat/lon grid.
     """
     h = np.asarray(state.q[0])
     momx = np.asarray(state.q[1])
@@ -343,7 +370,9 @@ def _record_snapshot(
     mom_north = h * u_north
 
     _F32_MAX = np.finfo(np.float32).max
-    target_shape = (Nlat, Nlon)
+    S = int(oversample)
+    super_shape = (Nlat, S, Nlon, S)
     for c, field_cells in enumerate((h, mom_east, mom_north)):
-        gathered = field_cells.reshape(-1)[nn_indices].reshape(target_shape)
+        gathered_super = field_cells.reshape(-1)[nn_indices].reshape(super_shape)
+        gathered = gathered_super.mean(axis=(1, 3))
         fields_out[k, c] = np.clip(np.nan_to_num(gathered), -_F32_MAX, _F32_MAX).astype(np.float32)

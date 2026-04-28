@@ -13,13 +13,13 @@ class _MissingNatten:
 
 
 try:
-    from baselines.transformer import Transformer
+    from fots.models.baselines.transformer import Transformer
 except ImportError:
     Transformer = _MissingNatten
 try:
-    from baselines.segformer import Segformer
+    from fots.models.baselines.segformer import Segformer
 except ImportError:
     Segformer = _MissingNatten
-from baselines.unet import UNet
+from fots.models.baselines.unet import UNet
 
 __all__ = ["Segformer", "Transformer", "UNet"]

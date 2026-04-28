@@ -1,0 +1,55 @@
+# Training config for the PlanetSWE baseline sweep.
+# 4-frame history → 1 predicted frame; phase 2 unrolls 2 autoregressive steps,
+# so the data loader returns 2 ground-truth output frames (phase 1 only uses
+# the first one).
+name: paper
+experiment_dir: runs
+auto_resume: false
+test_mode: false
+folder_override: ""
+checkpoint_override: ""
+config_override: ""
+
+wandb:
+  enabled: true
+  mode: online
+  project: flowers-on-the-sphere
+  entity: null
+  group: null
+  tags: []
+
+# Override fields injected on top of the data config.
+data:
+  n_steps_input: 4
+  n_steps_output: 2
+  max_rollout_steps: 20
+  data_workers: 8
+
+# Size the model output for one predicted frame regardless of how many GT
+# frames the loader returns; the AR phase rolls the model forward in code.
+model_predict_steps: 1
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: 25
+  eta_min: 1.0e-5
+
+loss:
+  _target_: torch.nn.MSELoss
+
+trainer:
+  _target_: fots.trainer.Trainer
+  epochs: 20
+  ar_epochs: 5
+  ar_steps: 2
+  checkpoint_frequency: 1
+  val_frequency: 1
+  rollout_val_frequency: 1
+  max_rollout_steps: 20
+  grad_clip: 1.0
+  checkpoint_path: ""

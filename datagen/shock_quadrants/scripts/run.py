@@ -50,6 +50,8 @@ def main() -> int:
     ap.add_argument("--stop-sim-time", type=float, default=1.5)
     ap.add_argument("--cfl-desired", type=float, default=0.45)
     ap.add_argument("--cfl-max", type=float, default=0.9)
+    ap.add_argument("--sub-samples", type=int, default=4,
+                    help="Sub-cell antialiasing factor (S × S per cell).")
     args = ap.parse_args()
 
     _setup_logging()
@@ -76,6 +78,7 @@ def main() -> int:
             stop_sim_time=args.stop_sim_time,
             cfl_desired=args.cfl_desired,
             cfl_max=args.cfl_max,
+            sub_samples=args.sub_samples,
         )
     except Exception as exc:
         log.exception("Simulation failed")

@@ -27,7 +27,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from datagen.galewsky.so3 import rotation_from_seed
-from datagen.shock_quadrants.geometry import en_to_xyz
+from datagen.shock_quadrants.geometry import en_to_xyz, subcell_centers_latlon
 
 
 # h strictly positive (keeps h far from 0 to prevent blow-up at shock fronts).
@@ -77,28 +77,40 @@ def fill_ic(
     seed: int,
     lat_centers: np.ndarray,
     lon_centers: np.ndarray,
+    xlower: float,
+    ylower: float,
+    dx: float,
+    dy: float,
     axis: np.ndarray,
     angle: float,
+    sub_samples: int = 4,
 ) -> None:
     """Fill the four conserved-state arrays in place at every cell.
 
-    ``lat_centers`` and ``lon_centers`` are 2-D ``(Nx, Ny)`` arrays of
-    cell-centre coordinates in radians.
-
-    The per-quadrant ``(u, v)`` east/north velocities are projected into
-    the solver's 3-D Cartesian momentum frame via ``geometry.en_to_xyz``,
-    consistent with ``shallow_sphere_2D``'s ``(h, h·ux, h·uy, h·uz)``
-    conserved-variable layout.
+    Sub-cell antialiased classification: every cell is sub-sampled
+    ``sub_samples × sub_samples`` times in computational ``(X, Y)``,
+    every sub-point is back-rotated to the canonical frame and classified
+    into one of four quadrants, and the cell IC is the mean of primitives
+    ``(h, u_east, u_north)`` across sub-points. The momentum is converted
+    to 3-D Cartesian at the cell centre, which keeps each cell's momentum
+    exactly tangent to the sphere. Boundary cells get a clean one-cell
+    soft transition instead of the cell-centre staircase the rotated
+    quadrant interfaces produced before.
     """
     states = sample_quadrant_states(seed)
+    Nx, Ny = lat_centers.shape
 
-    # Back-rotate every cell centre into the canonical frame.
-    sin_t = np.cos(lat_centers)   # sin(colatitude) = cos(lat)
-    cos_t = np.sin(lat_centers)   # cos(colatitude) = sin(lat)
+    # Sub-point lat/lon, shape (Nx, Ny, S, S).
+    lat_s, lon_s = subcell_centers_latlon(
+        Nx, Ny, xlower, ylower, dx, dy, sub_samples,
+    )
+
+    # Back-rotate every sub-point into the canonical frame.
+    cos_lat_s = np.cos(lat_s)
     r_out = np.stack(
-        [sin_t * np.cos(lon_centers),
-         sin_t * np.sin(lon_centers),
-         cos_t],
+        [cos_lat_s * np.cos(lon_s),
+         cos_lat_s * np.sin(lon_s),
+         np.sin(lat_s)],
         axis=-1,
     )
     R_inv = Rotation.from_rotvec(angle * np.asarray(axis)).inv().as_matrix()
@@ -106,21 +118,26 @@ def fill_ic(
     r_in[..., 2] = np.clip(r_in[..., 2], -1.0, 1.0)
     lat_in = np.arcsin(r_in[..., 2])
     lon_in = np.mod(np.arctan2(r_in[..., 1], r_in[..., 0]), 2.0 * np.pi)
-    qidx = quadrant_index_canonical(lat_in, lon_in)
+    qidx = quadrant_index_canonical(lat_in, lon_in)  # (Nx, Ny, S, S)
 
-    h_field = np.empty_like(lat_centers)
-    u_field = np.empty_like(lat_centers)
-    v_field = np.empty_like(lat_centers)
+    h_sub = np.empty(qidx.shape, dtype=np.float64)
+    u_sub = np.empty(qidx.shape, dtype=np.float64)
+    v_sub = np.empty(qidx.shape, dtype=np.float64)
     for q, s in enumerate(states):
         mask = qidx == q
-        h_field[mask] = s["h"]
-        u_field[mask] = s["u"]
-        v_field[mask] = s["v"]
+        h_sub[mask] = s["h"]
+        u_sub[mask] = s["u"]
+        v_sub[mask] = s["v"]
 
-    # Convert (u_east, u_north) → 3-D Cartesian, then multiply by h.
-    ux, uy, uz = en_to_xyz(lat_centers, lon_centers, u_field, v_field)
+    # Cell-mean primitives over sub-points.
+    h_cell = h_sub.mean(axis=(-2, -1))
+    u_cell = u_sub.mean(axis=(-2, -1))
+    v_cell = v_sub.mean(axis=(-2, -1))
 
-    h_out[...] = h_field
-    momx_out[...] = h_field * ux
-    momy_out[...] = h_field * uy
-    momz_out[...] = h_field * uz
+    # Convert (u_east, u_north) → 3-D Cartesian at cell centre, then ×h.
+    ux, uy, uz = en_to_xyz(lat_centers, lon_centers, u_cell, v_cell)
+
+    h_out[...] = h_cell
+    momx_out[...] = h_cell * ux
+    momy_out[...] = h_cell * uy
+    momz_out[...] = h_cell * uz

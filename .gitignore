@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Locally-built source dependencies (e.g. torch-harmonics CUDA rebuild)
+third_party/
+
 # SLURM logs
 slurm/*.out
 slurm/*.err
@@ -23,3 +26,5 @@ data/
 runs/
 .claude
 .python_version
+notebooks/*.mp4
+slurm/

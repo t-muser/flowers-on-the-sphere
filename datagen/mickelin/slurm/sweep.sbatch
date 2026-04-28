@@ -2,7 +2,7 @@
 #SBATCH --job-name=mickelin-sweep
 #SBATCH --partition=scicore
 #SBATCH --qos=6hours
-#SBATCH --array=0-0
+#SBATCH --array=0-479
 #SBATCH --nodes=1
 #SBATCH --ntasks=16
 #SBATCH --cpus-per-task=1
