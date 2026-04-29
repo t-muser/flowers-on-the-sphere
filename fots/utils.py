@@ -9,7 +9,39 @@ import logging
 import os
 import os.path as osp
 
+import torch
 from omegaconf import DictConfig, OmegaConf
+
+
+def build_warmup_cosine(
+    optimizer: torch.optim.Optimizer,
+    warmup_epochs: int,
+    T_max: int,
+    eta_min: float = 0.0,
+    start_factor: float = 1.0e-3,
+) -> torch.optim.lr_scheduler.SequentialLR:
+    """Linear warmup for ``warmup_epochs`` then cosine anneal.
+
+    ``T_max`` is the total epoch count (warmup + cosine); the cosine phase
+    runs for ``T_max - warmup_epochs`` epochs so callers can keep passing
+    the run's total epoch count, matching the prior CosineAnnealingLR setup.
+    """
+    if warmup_epochs <= 0:
+        return torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=T_max, eta_min=eta_min
+        )
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=start_factor,
+        end_factor=1.0,
+        total_iters=warmup_epochs,
+    )
+    cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=max(T_max - warmup_epochs, 1), eta_min=eta_min
+    )
+    return torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[warmup, cosine], milestones=[warmup_epochs]
+    )
 
 
 def configure_paths(experiment_folder: str):
