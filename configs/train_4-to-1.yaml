@@ -40,7 +40,8 @@ lr_scheduler:
   eta_min: 1.0e-5
 
 loss:
-  _target_: torch.nn.MSELoss
+  _target_: fots.metrics.LatitudeWeightedMSELoss
+  # nlat / grid filled in by fots.train from datamodule.metadata.
 
 trainer:
   _target_: fots.trainer.Trainer

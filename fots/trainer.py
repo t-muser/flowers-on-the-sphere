@@ -236,6 +236,7 @@ class Trainer:
         logs[f"{tag}/loss"] = loss_total / denom
         logger.info(
             f"{tag}: loss {logs[f'{tag}/loss']:.6g} "
+            f"vrmse {logs.get(f'{tag}/vrmse', float('nan')):.6g} "
             f"rmse_sphere {logs.get(f'{tag}/rmse_sphere', float('nan')):.6g} "
             f"rel_l2 {logs.get(f'{tag}/rel_l2', float('nan')):.6g}"
         )
@@ -359,7 +360,8 @@ class Trainer:
             for kk, vv in step_acc.items():
                 logs[f"{tag}/step{k + 1}/{kk}"] = vv / denom
         logger.info(
-            f"{tag}: rmse_sphere {logs.get(f'{tag}/rmse_sphere', float('nan')):.6g} "
+            f"{tag}: vrmse {logs.get(f'{tag}/vrmse', float('nan')):.6g} "
+            f"rmse_sphere {logs.get(f'{tag}/rmse_sphere', float('nan')):.6g} "
             f"rel_l2 {logs.get(f'{tag}/rel_l2', float('nan')):.6g} "
             f"over {len(per_step_agg)} steps × {denom} batches"
         )

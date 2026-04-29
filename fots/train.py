@@ -30,6 +30,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
 from fots.data.datamodule import AbstractDataModule
+from fots.metrics import LatitudeWeightedMSELoss, latitude_weights
 from fots.trainer import Trainer
 from fots.utils import configure_experiment, get_experiment_name
 
@@ -153,6 +154,13 @@ def run_main(cfg: DictConfig):
         lr_scheduler = instantiate(cfg.lr_scheduler, optimizer=optimizer)
 
     loss_fn = instantiate(cfg.loss) if "loss" in cfg else torch.nn.MSELoss()
+    if isinstance(loss_fn, LatitudeWeightedMSELoss) and "lat_weights" not in loss_fn._buffers:
+        md = datamodule.metadata
+        nlat = md.spatial_resolution[0]
+        grid = getattr(md, "grid", "equiangular")
+        loss_fn.set_lat_weights(latitude_weights(nlat, grid=grid))
+        logger.info(f"loss: lat-weighted MSE on {nlat}-pt {grid} grid")
+    loss_fn = loss_fn.to(device) if isinstance(loss_fn, torch.nn.Module) else loss_fn
 
     with open(osp.join(experiment_folder, "extended_config.yaml"), "w") as f:
         OmegaConf.save(cfg, f)
