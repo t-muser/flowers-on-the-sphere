@@ -40,6 +40,8 @@ def main() -> int:
                     help="Directory for the FiPy HDF5 snapshot file.")
     ap.add_argument("--cell-size", type=float, default=0.3,
                     help="Gmsh target cell size (smaller -> finer mesh).")
+    ap.add_argument("--mesh-overlap", type=int, default=1,
+                    help="Gmsh overlap parameter for parallel partitioning.")
     ap.add_argument("--snapshot-dt", type=float, default=10.0,
                     help="Solver-time interval between snapshots.")
     ap.add_argument("--stop-sim-time", type=float, default=630.0)
