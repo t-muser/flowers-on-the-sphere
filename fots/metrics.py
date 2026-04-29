@@ -84,7 +84,11 @@ def compute_loss_metrics(
     - ``mse_sphere`` / ``rmse_sphere``: cos-lat-weighted MSE / RMSE.
     - ``vrmse``: variance-scaled RMSE per field (The Well's primary
       metric, ``sqrt(MSE / Var(y))``), averaged over the batch and then
-      over fields. Cross-field comparable.
+      over fields. Cross-field comparable. Lat-weighted in both numerator
+      and denominator to match the loss.
+    - ``vrmse_unweighted``: same shape as ``vrmse`` but with *unweighted* spatial
+      mean / variance (uniform per-pixel) — the form The Well reports, so
+      its leaderboard numbers are directly comparable.
     - ``nrmse``: ``sqrt(MSE / mean(y²))``, the norm-scaled variant.
     - ``rel_l2``: per-sample ``||ŷ − y||₂ / ||y||₂``, batch-mean.
     - ``pearson``: spatial Pearson correlation per field (1.0 is
@@ -127,6 +131,16 @@ def compute_loss_metrics(
     per_field_vrmse = per_sample_vrmse.mean(dim=0)
     vrmse_mean = per_field_vrmse.mean().item()
 
+    # Unweighted (Well-style) VRMSE for direct leaderboard comparison.
+    per_sample_mse_uw = sq.mean(dim=(-2, -1))                              # (B, C)
+    mean_y_uw = y_target.mean(dim=(-2, -1))                                # (B, C)
+    per_sample_var_y_uw = (
+        (y_target - mean_y_uw[..., None, None]).pow(2).mean(dim=(-2, -1))
+    )
+    per_sample_vrmse_unweighted = (per_sample_mse_uw / (per_sample_var_y_uw + eps)).sqrt()
+    per_field_vrmse_unweighted = per_sample_vrmse_unweighted.mean(dim=0)
+    vrmse_unweighted_mean = per_field_vrmse_unweighted.mean().item()
+
     per_sample_nrmse = (per_sample_mse / (per_sample_norm_y + eps)).sqrt()
     per_field_nrmse = per_sample_nrmse.mean(dim=0)
     nrmse_mean = per_field_nrmse.mean().item()
@@ -158,6 +172,7 @@ def compute_loss_metrics(
         "mse_sphere": sphere_mse,
         "rmse_sphere": sphere_rmse,
         "vrmse": vrmse_mean,
+        "vrmse_unweighted": vrmse_unweighted_mean,
         "nrmse": nrmse_mean,
         "rel_l2": rel_l2_mean,
         "pearson": pearson_mean,
@@ -167,6 +182,7 @@ def compute_loss_metrics(
     for i, name in enumerate(names[:C]):
         metrics[f"rmse_sphere/{name}"] = per_field_rmse[i].item()
         metrics[f"vrmse/{name}"] = per_field_vrmse[i].item()
+        metrics[f"vrmse_unweighted/{name}"] = per_field_vrmse_unweighted[i].item()
         metrics[f"nrmse/{name}"] = per_field_nrmse[i].item()
         metrics[f"rel_l2/{name}"] = rel_l2_per_field[i].item()
         metrics[f"pearson/{name}"] = per_field_pearson[i].item()
