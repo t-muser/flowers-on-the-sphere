@@ -28,3 +28,5 @@ runs/
 .python_version
 notebooks/*.mp4
 slurm/
+
+**/.ipynb_checkpoints/

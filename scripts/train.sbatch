@@ -35,9 +35,23 @@ if [ "${TEST_MODE:-false}" = "true" ]; then
         test_mode=true \
         auto_resume=true
 else
+    # Stage dataset on the node-local scratch ($TMPDIR) — reads from the
+    # centralized GPFS path are too slow to keep the GPU fed.
+    SRC_BASE=$(awk '/^\s*well_base_path:/ {print $2; exit}' "$DATA_CONFIG")
+    DATASET_NAME=$(awk '/^\s*well_dataset_name:/ {print $2; exit}' "$DATA_CONFIG")
+    SCRATCH_BASE="${TMPDIR}/the-well/datasets"
+    cleanup() { rm -rf "${TMPDIR}/the-well" 2>/dev/null; }
+    trap cleanup EXIT
+
+    mkdir -p "$SCRATCH_BASE"
+    echo "Copying ${SRC_BASE}/${DATASET_NAME} to ${SCRATCH_BASE}/ ..."
+    cp -r "${SRC_BASE}/${DATASET_NAME}" "${SCRATCH_BASE}/"
+    echo "Data copy complete ($(du -sh ${SCRATCH_BASE}/${DATASET_NAME} | cut -f1))."
+
     uv run --no-sync python -m fots.train \
         --data "$DATA_CONFIG" --model "$MODEL_CONFIG" --train "$TRAIN_CONFIG" \
         optimizer.lr="$LR" \
         data.batch_size="$BATCH_SIZE" \
+        data.well_base_path="$SCRATCH_BASE" \
         name="$NAME"
 fi

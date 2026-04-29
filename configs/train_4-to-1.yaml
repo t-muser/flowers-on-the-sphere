@@ -36,7 +36,7 @@ optimizer:
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-  T_max: 25
+  T_max: 50 # should match total epochs below
   eta_min: 1.0e-5
 
 loss:
@@ -44,8 +44,8 @@ loss:
 
 trainer:
   _target_: fots.trainer.Trainer
-  epochs: 20
-  ar_epochs: 5
+  epochs: 40
+  ar_epochs: 10
   ar_steps: 2
   checkpoint_frequency: 1
   val_frequency: 1
