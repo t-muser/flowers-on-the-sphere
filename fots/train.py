@@ -126,17 +126,15 @@ def run_main(cfg: DictConfig):
     logger.info(f"Experiment: {experiment_name} at {experiment_folder}")
     logger.info(f"Config:\n{OmegaConf.to_yaml(cfg)}")
 
-    # In test mode, load best.pt (lowest val loss) rather than recent.pt
-    # (last epoch). configure_experiment defaults to recent.pt for resume.
     if bool(OmegaConf.select(cfg, "test_mode")):
-        best_ckpt = osp.join(ckpt_folder, "best.pt")
-        if not osp.isfile(best_ckpt):
+        recent_ckpt = osp.join(ckpt_folder, "recent.pt")
+        if not osp.isfile(recent_ckpt):
             raise FileNotFoundError(
-                f"test_mode=true but no best.pt at {best_ckpt}. "
+                f"test_mode=true but no recent.pt at {recent_ckpt}. "
                 "Make sure the train job ran to completion in this folder."
             )
-        cfg.trainer.checkpoint_path = best_ckpt
-        logger.info(f"test_mode: overriding checkpoint to {best_ckpt}")
+        cfg.trainer.checkpoint_path = recent_ckpt
+        logger.info(f"test_mode: using final checkpoint {recent_ckpt}")
 
     logger.info(f"Instantiate datamodule {cfg.data._target_}")
     datamodule: AbstractDataModule = instantiate(cfg.data)
