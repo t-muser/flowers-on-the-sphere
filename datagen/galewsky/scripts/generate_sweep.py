@@ -22,16 +22,16 @@ import itertools
 import json
 from pathlib import Path
 
-# Parameter grid (5 · 4 · 4 · 4 · 8 = 2560 runs). Keep axes in this order
+# Parameter grid (5 · 4 · 2 · 4 · 6 = 960 runs). Keep axes in this order
 # because the run index is computed row-major over them. ``seed`` controls
 # both the SO(3) tilt axis/angle (postprocess time) and any other per-run
 # stochastic choices.
 PARAM_GRID: dict[str, tuple[float, ...]] = {
     "u_max": (60.0, 70.0, 80.0, 90.0, 100.0),
     "lat_center": (30.0, 40.0, 50.0, 60.0),
-    "h_hat": (60.0, 120.0, 180.0, 240.0),
+    "h_hat": (60.0, 240.0),
     "H": (8000.0, 10000.0, 12000.0, 14000.0),
-    "seed": tuple(float(s) for s in range(8)),
+    "seed": tuple(float(s) for s in range(6)),
 }
 
 

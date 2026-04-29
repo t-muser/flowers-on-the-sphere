@@ -2,17 +2,18 @@
 #SBATCH --job-name=galewsky-sweep
 #SBATCH --partition=scicore
 #SBATCH --qos=6hours
-#SBATCH --array=0-2559
+#SBATCH --array=1-959
 #SBATCH --nodes=1
 #SBATCH --ntasks=16
 #SBATCH --cpus-per-task=1
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=datagen/galewsky/slurm/logs/sweep-%A_%a.out
 #SBATCH --error=datagen/galewsky/slurm/logs/sweep-%A_%a.err
 #
-# Full parameter sweep: 2560 runs at production resolution
-# (Nphi=512, Ntheta=256), 6 days simulated, hourly output. The grid is
-# u_max × lat_center × h_hat × H × seed = 5·4·4·4·8.
+# Full parameter sweep: 960 runs at production resolution
+# (Nphi=512, Ntheta=256), 32 days simulated, 4-hourly output (168 frames
+# after a 4-day spinup is dropped in postprocess). The grid is
+# u_max × lat_center × h_hat × H × seed = 5·4·2·4·6.
 # Each array task: Dedalus solve in job-local scratch, then resample and
 # write the final Zarr directly to the persistent group dataset path.
 #
@@ -65,7 +66,9 @@ echo "    zarr (final): ${ZARR_OUT}"
 set +e
 mpirun -n "${SLURM_NTASKS}" ${UV} python -m datagen.galewsky.scripts.run \
     --config "${CONFIG}" \
-    --out-dir "${RAW_DIR}"
+    --out-dir "${RAW_DIR}" \
+    --stop-sim-time 2764800 \
+    --snapshot-dt 14400
 SOLVER_RC=$?
 set -e
 

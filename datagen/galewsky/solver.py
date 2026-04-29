@@ -93,8 +93,10 @@ def _equivalent_lap_viscosity_phys(nu_bi_sim: float) -> float:
 @dataclass(frozen=True)
 class RunConfig:
     """Run configuration. Time units are in physical seconds."""
-    snapshot_dt: float = 3600.0
-    stop_sim_time: float = 16 * 86400.0
+
+    # these lines are unconditionally overriden by argparse, don't change them here, there will be no effect.
+    snapshot_dt: float = 7200.0 # 3600.0
+    stop_sim_time: float = 32 * 86400.0 #16 * 86400.0
     Nphi: int = 512
     Ntheta: int = 256
     initial_dt: float = 120.0
