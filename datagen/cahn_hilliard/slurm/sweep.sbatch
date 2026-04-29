@@ -2,7 +2,7 @@
 #SBATCH --job-name=cahn-hilliard-sweep
 #SBATCH --partition=scicore
 #SBATCH --qos=6hours
-#SBATCH --array=0-767
+#SBATCH --array=0-575
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
