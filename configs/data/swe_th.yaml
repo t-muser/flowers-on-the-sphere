@@ -1,0 +1,16 @@
+# On-the-fly shallow-water equations dataset via torch_harmonics.examples.
+# Smoke-run size: 16 train / 4 val, 64x128 equiangular grid.
+data:
+  _target_: fots.data.swe_th.SweThDataModule
+  dataset_name: swe_th
+  nlat: 64
+  nlon: 128
+  dt: 3600
+  n_steps_input: 1
+  n_steps_output: 1
+  batch_size: 2
+  num_workers: 0
+  train_size: 16
+  val_size: 4
+  grid: equiangular
+  normalize: true

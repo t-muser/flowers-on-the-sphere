@@ -1,0 +1,17 @@
+# Shock-caps ensemble (500 runs, 256x512 equiangular grid).
+# Fields: height, momentum_u, momentum_v (3 channels).
+# Trajectory: 101 snapshots.
+data:
+  _target_: fots.data.zarr_dataset.ZarrDataModule
+  root: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/shock-caps
+  dataset_name: shock_caps
+  time_steps_per_run: 101
+  dim_in: 3
+  dim_out: 3
+  spatial_resolution: [256, 512]
+  grid: equiangular
+  field_names: [height, momentum_u, momentum_v]
+  batch_size: 4
+  n_steps_input: 4
+  n_steps_output: 1
+  num_workers: 8

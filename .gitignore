@@ -21,7 +21,7 @@ datagen/**/slurm/logs/*.err
 # Datagen-generated run configs and local data paths
 datagen/**/configs/
 datagen/uv.lock
-data/
+/data/
 
 runs/
 .claude

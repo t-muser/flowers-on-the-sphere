@@ -1,0 +1,17 @@
+# Cahn-Hilliard phase-field ensemble (576 runs, 256x512 equiangular grid).
+# Fields: phi (1 channel).
+# Trajectory: 64 snapshots.
+data:
+  _target_: fots.data.zarr_dataset.ZarrDataModule
+  root: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/cahn-hilliard-sphere
+  dataset_name: cahn_hilliard
+  time_steps_per_run: 64
+  dim_in: 1
+  dim_out: 1
+  spatial_resolution: [256, 512]
+  grid: equiangular
+  field_names: [phi]
+  batch_size: 4
+  n_steps_input: 4
+  n_steps_output: 1
+  num_workers: 8

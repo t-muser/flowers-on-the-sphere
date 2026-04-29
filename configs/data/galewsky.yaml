@@ -1,0 +1,17 @@
+# Galewsky shallow-water ensemble (2560 runs, 256x512 equiangular grid).
+# Fields: u_phi, u_theta, h, vorticity (4 channels).
+# Trajectory: 168 snapshots at 4 h cadence.
+data:
+  _target_: fots.data.zarr_dataset.ZarrDataModule
+  root: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/galewsky-sw
+  dataset_name: galewsky
+  time_steps_per_run: 168
+  dim_in: 4
+  dim_out: 4
+  spatial_resolution: [256, 512]
+  grid: equiangular
+  field_names: [u_phi, u_theta, h, vorticity]
+  batch_size: 4
+  n_steps_input: 4
+  n_steps_output: 1
+  num_workers: 8
