@@ -35,8 +35,9 @@ optimizer:
   weight_decay: 1.0e-4
 
 lr_scheduler:
-  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-  T_max: 50 # should match total epochs below
+  _target_: fots.utils.build_warmup_cosine
+  warmup_epochs: 2
+  T_max: 50 # should match total epochs below (warmup + cosine)
   eta_min: 1.0e-5
 
 loss:
