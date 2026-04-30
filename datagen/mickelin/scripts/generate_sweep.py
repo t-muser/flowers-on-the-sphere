@@ -30,7 +30,7 @@ import json
 from pathlib import Path
 
 
-# Parameter grid (4 · 3 · 40 = 480 runs). Keep axes in this order because the
+# Parameter grid (4 · 6 · 20 = 480 runs). Keep axes in this order because the
 # run index is computed row-major over them.
 PARAM_GRID_MICKELIN: dict[str, tuple[float, ...]] = {
     "r_over_lambda": (2.0, 4.0, 7.0, 10.0),
