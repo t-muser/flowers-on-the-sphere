@@ -120,18 +120,13 @@ def unstable_band_ell_max(
 ) -> int:
     """Maximum ``ℓ`` covered by the Mickelin unstable band, plus a safety margin.
 
-    The unstable band in wavenumber is
-    ``k₊ = (π/Λ)·(1 + κΛ/2)``; converting to spherical-harmonic degree via
-    ``ℓ ≈ k·R`` and rounding up gives the smallest ``ℓ_init`` that already
-    seeds the linearly-fastest-growing modes. Adding ``safety`` margin pads
-    a few degrees above the band edge so the initial spectrum doesn't have
-    to climb up to the peak from below.
+    Band edge in k: k₊ = π/Λ + κ/2 (consistent with Mickelin SM).
     """
     if Lambda <= 0:
         raise ValueError(f"Lambda must be positive, got {Lambda}")
     if kappa <= 0:
         raise ValueError(f"kappa must be positive, got {kappa}")
-    k_plus = (math.pi / Lambda) * (1.0 + kappa * Lambda / 2.0)
+    k_plus = math.pi / Lambda + 0.5 * kappa
     return int(math.ceil(R * k_plus)) + int(safety)
 
 
