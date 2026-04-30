@@ -8,6 +8,7 @@ data:
   well_dataset_name: planetswe
 
   batch_size: 2
+  data_workers: 8
   n_steps_input: 1
   n_steps_output: 1
   min_dt_stride: 1
