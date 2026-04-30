@@ -109,6 +109,7 @@ class Trainer:
         self.lat_weights = (
             latitude_weights(nlat, grid=grid, device=device) if nlat else None
         )
+        self.denormalize_fn = getattr(datamodule, "denormalize_fn", None)
 
         if checkpoint_path:
             self.load_checkpoint(checkpoint_path)
@@ -224,8 +225,13 @@ class Trainer:
                 y = y[:, 0]
             y_pred = self.model(x)
             loss_total += float(self.loss_fn(y_pred, y).item())
+            if self.denormalize_fn is not None:
+                y_pred_m = self.denormalize_fn(y_pred)
+                y_m = self.denormalize_fn(y)
+            else:
+                y_pred_m, y_m = y_pred, y
             m = compute_loss_metrics(
-                y_pred, y,
+                y_pred_m, y_m,
                 lat_weights=self.lat_weights,
                 field_names=self.field_names or None,
             )
@@ -338,9 +344,14 @@ class Trainer:
             steps = min(max_steps, T_out)
             for k in range(steps):
                 y_pred = self.model(hist)
+                if self.denormalize_fn is not None:
+                    y_pred_m = self.denormalize_fn(y_pred)
+                    y_k_m = self.denormalize_fn(y[:, k])
+                else:
+                    y_pred_m, y_k_m = y_pred, y[:, k]
                 m = compute_loss_metrics(
-                    y_pred,
-                    y[:, k],
+                    y_pred_m,
+                    y_k_m,
                     lat_weights=self.lat_weights,
                     field_names=self.field_names or None,
                 )
