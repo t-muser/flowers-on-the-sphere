@@ -8,21 +8,19 @@ of Mickelin et al. (2018).
 
 **Extended description.** Each trajectory solves the
 vorticity–stream-function form of the Mickelin generalized
-Navier–Stokes (GNS) equation on a unit sphere with an additional gentle
-large-scale Rayleigh (Ekman) drag `+ μ·ω`. The linear operator
+Navier–Stokes (GNS) equation on a unit sphere. The linear operator
 `f(Δ+4K)(Δ+2K)` has a narrow band of unstable spherical-harmonic modes
 centred on `ℓ ≈ πR/Λ` with half-width `≈ κR/2`. Inside the band,
 vortices of size `Λ` are continuously injected; outside, dissipation
 dominates. In the target A-phase regime `R⁻¹ < κ < Λ⁻¹` these vortices
-self-organise into percolating anti-ferromagnetic chains. The Rayleigh
-drag drains the neutral `ℓ = 1` rigid-rotation mode and any other
-linearly stable large-scale modes that would otherwise accumulate
-energy from the inverse cascade indefinitely; without it the dipole
-mode runs away and `|u|_max → ∞`. The initial condition seeds modes
-**directly inside** the unstable band (rather than far below it) so the
-saturation is reached on an `O(τ)` timescale instead of after tens of
-thousands of solver steps spent waiting for round-off to bootstrap the
-instability. Unlike Galewsky (deterministic rollup), the Mickelin flow
+self-organise into percolating anti-ferromagnetic chains. The
+constant-mode and rigid-rotation directions of the configuration space
+are removed by gauge constraints (`⟨ψ⟩ = 0`, `⟨ω⟩ = 0`) and by
+excluding `ℓ = 0, 1` from the initial condition. The initial condition
+seeds modes **directly inside** the unstable band (rather than far
+below it) so the saturation is reached on an `O(τ)` timescale instead
+of after tens of thousands of solver steps spent waiting for round-off
+to bootstrap the instability. Unlike Galewsky (deterministic rollup), the Mickelin flow
 is chaotic, and ensemble diversity comes from **random initial
 conditions** rather than IC-parameter variation. Each trajectory is
 nevertheless a fully deterministic function of the triple
@@ -52,13 +50,13 @@ GNS equation on a sphere of radius `R` with Gaussian curvature
 $$
 \begin{aligned}
 \Delta\psi &= -\omega,\\
-\partial_t \omega + J(\psi,\omega) &= f(\Delta + 4K)(\Delta + 2K)\,\omega \;-\; \mu\,\omega,
+\partial_t \omega + J(\psi,\omega) &= f(\Delta + 4K)(\Delta + 2K)\,\omega,
 \end{aligned}
 $$
 
 where `ω(θ, φ, t)` is the vertical component of vorticity, `ψ(θ, φ, t)`
-the stream function, `μ ≥ 0` is the Rayleigh-drag rate, the
-divergence-free velocity is `v = skew(∇ψ)`, and the Jacobian is
+the stream function, the divergence-free velocity is `v = skew(∇ψ)`,
+and the Jacobian is
 
 $$
 J(\psi,\omega)\;=\;\frac{1}{R^2 \sin\theta}\bigl(\partial_\theta\omega\,\partial_\varphi\psi
@@ -75,16 +73,12 @@ $$
 
 ### Spectral growth rate and band-limited instability
 
-On a spherical-harmonic mode `Y_ℓ^m` the **driving** linear operator has
-eigenvalue
+On a spherical-harmonic mode `Y_ℓ^m` the linear operator has eigenvalue
 
 $$
-\sigma_\mathrm{drive}(\ell) \;=\; f\!\bigl(-k^2 + 4K\bigr)\cdot(2K - k^2),
-\qquad k^2 \equiv \ell(\ell+1)/R^2 ,
+\sigma(\ell) \;=\; f\!\bigl(-k^2 + 4K\bigr)\cdot(2K - k^2),
+\qquad k^2 \equiv \ell(\ell+1)/R^2 .
 $$
-
-and the full linear growth rate including the Rayleigh drag is
-`σ(ℓ) = σ_drive(ℓ) − μ`.
 
 Because `Γ₄ > 0`, `f(x)` is an upward-opening parabola with two real
 roots `X_lo < X_hi`, negative between them. Mapping back through
@@ -95,9 +89,8 @@ k_-^2 \;=\; (\pi/\Lambda)^2\bigl(1 - \kappa\Lambda/2\bigr)^2,\qquad
 k_+^2 \;=\; (\pi/\Lambda)^2\bigl(1 + \kappa\Lambda/2\bigr)^2,
 $$
 
-with peak driving rate `σ_drive(ℓ_peak) = 1/τ` by construction of the
-amplitude rescaling. The post-drag peak growth rate is
-`σ(ℓ_peak) = 1/τ − μ`. Peak ℓ and band edges in spherical-harmonic
+with peak growth rate `σ(ℓ_peak) = 1/τ` by construction of the
+amplitude rescaling. Peak ℓ and band edges in spherical-harmonic
 units:
 
 $$
@@ -118,13 +111,6 @@ predictions in
 | `R`    | `1`        | Sphere radius (non-dimensional) |
 | `τ`    | `1`        | Inverse peak driving rate (time unit) |
 | `K`    | `1/R² = 1` | Gaussian curvature |
-| `μ`    | `0.02 / τ` | Rayleigh drag on the vorticity equation |
-
-The drag rate `μ = 0.02/τ` is fixed across the whole ensemble. It is 2 %
-of the peak driving rate `1/τ`, small enough to leave the linear
-instability essentially untouched (post-drag peak growth `≈ 0.98/τ`),
-large enough to drain the neutral `ℓ = 1` mode over `O(50·τ)` and
-prevent inverse-cascade pile-up at the dipole.
 
 All times are reported in units of `τ`; all lengths in units of `R`.
 
@@ -229,8 +215,8 @@ This keeps each trajectory a deterministic function of the triple
   constraint on the Poisson solve (the sphere Laplacian has a 1-D
   constant null space). `⟨ω⟩ = 0` is similarly enforced as a gauge.
 - **Timestepper.** `RK222` IMEX; the 6th-order linear operator
-  `f(Δ+4K)(Δ+2K) − μ` goes on the implicit side (Rayleigh drag included),
-  the advective Jacobian on the explicit side.
+  `f(Δ+4K)(Δ+2K)` goes on the implicit side, the advective Jacobian on
+  the explicit side.
 - **CFL-adaptive `dt`** (safety `0.3`, `max_dt = 0.05 τ`,
   `initial_dt = 0.005 τ`, max change 1.5, min change 0.5).
 - **Integration window.** `0 ≤ t ≤ 130 τ`; snapshots stored at cadence
@@ -249,8 +235,8 @@ row-major order over the tuple
 | Active bandwidth | `kappa_lambda`  | 0.3, 0.5, 0.7                 | 3     |
 | IC seed          | `seed`          | 0, 1, …, 39                   | 40    |
 
-Physics constants `R = 1`, `τ = 1`, and `μ = 0.02` are fixed across the
-ensemble; the per-run derived parameters are `Λ = R / r_over_lambda`
+Physics constants `R = 1` and `τ = 1` are fixed across the ensemble;
+the per-run derived parameters are `Λ = R / r_over_lambda`
 and `κ = kappa_lambda / Λ`, and `(Γ₀, Γ₂, Γ₄)` from the closed-form
 coefficient map. `ℓ_init` is derived from `(R, Λ, κ)` so the IC always
 seeds inside the unstable band. Resolution and time horizon are

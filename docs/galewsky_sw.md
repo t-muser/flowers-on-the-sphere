@@ -6,9 +6,10 @@ jet plus a localized height perturbation that seeds barotropic instability
 and a rollup of cyclones along the jet's poleward flank.
 
 **Extended description.** Each trajectory solves the global shallow-water
-equations on a rotating sphere of Earth-like radius for sixteen simulated
-days, of which the first four (linear spinup) are discarded, leaving a
-twelve-day window in the post-saturation / turbulent regime. The initial
+equations on a rotating sphere of Earth-like radius for thirty-two
+simulated days, of which the first four (linear spinup) are discarded,
+leaving a twenty-eight-day window in the post-saturation / turbulent
+regime. The initial
 condition is a bi-hemispheric extension of the Galewsky et al. (2004) test
 case: a pair of compact-support zonal jets — the canonical northern jet
 plus a mirrored southern jet at the opposite latitude — geostrophically
@@ -97,13 +98,13 @@ run at `N_θ = 256`.
 
 ### Temporal layout
 
-- **Snapshot cadence.** Every 3 600 s (1 h of simulated time).
-- **Simulation length.** 16 simulated days = 1 382 400 s.
-- **Output window.** Simulation days 4 – 16 only; the first 4 days
-  (linear spinup) are discarded at resample time. The remaining 289
-  snapshots span 0 – 12 d on the exported `time` axis (rebased so the
+- **Snapshot cadence.** Every 14 400 s (4 h of simulated time).
+- **Simulation length.** 32 simulated days = 2 764 800 s.
+- **Output window.** Simulation days 4 – 32 only; the first 4 days
+  (linear spinup) are discarded at resample time. The remaining 168
+  snapshots span 0 – 28 d on the exported `time` axis (rebased so the
   first kept snapshot is `t = 0`).
-- **Trajectory shape.** 289 snapshots per trajectory, each 1 h apart.
+- **Trajectory shape.** 168 snapshots per trajectory, each 4 h apart.
 - **Time coordinate.** Stored as seconds since the start of the kept
   window (`float64`).
 
@@ -131,11 +132,11 @@ make the tilt recoverable:
 
 ### Dataset size
 
-- **Number of trajectories.** 2 560.
-- **Shape per trajectory.** `(time=289, field=4, lat=256, lon=512)`.
-- **Per-trajectory size.** ≈ 577 MB (float32, uncompressed).
-- **Total ensemble size.** ≈ 1.4 TB.
-- **Consolidated shape.** `(run=2560, time=289, field=4, lat=256, lon=512)`.
+- **Number of trajectories.** 960.
+- **Shape per trajectory.** `(time=168, field=4, lat=256, lon=512)`.
+- **Per-trajectory size.** ≈ 336 MB (float32, uncompressed).
+- **Total ensemble size.** ≈ 315 GB.
+- **Consolidated shape.** `(run=960, time=168, field=4, lat=256, lon=512)`.
 
 ### Storage format
 
@@ -149,11 +150,12 @@ dimension with parameter arrays carried as `param_*` coords. The
 
 ### Train / val / test split
 
-A fixed 80 / 10 / 10 split of the 2 560 run IDs is distributed with the
-dataset as `splits.json` alongside `manifest.json`. The split is
-**stratified on `u_max`** with a deterministic RNG seed so every split
-sees all five jet-strength values in the target proportions. Counts are
-`{train: 2048, val: 256, test: 256}`. Typical use:
+A fixed 80 / 10 / 10 split of the 960 run IDs is distributed with the
+dataset as `splits.json` alongside `manifest.json`. The split is a
+deterministic random shuffle (seed `42`); counts are
+`{train: 768, val: 96, test: 96}`. The generator script also supports a
+stratified mode (`--strategy stratified --stratify-on u_max`) but the
+shipped `splits.json` is the plain random shuffle. Typical use:
 
 ```python
 import json, xarray as xr
@@ -320,11 +322,11 @@ grid latitude alone.
 
 ## Computational details
 
-- **Per-run wall.** ≈ 20 – 25 min on one scicore compute node with 16
+- **Per-run wall.** ≈ 40 – 50 min on one scicore compute node with 16
   MPI ranks (AMD Epyc / Intel Xeon class nodes, 128-core `scicore`
   partition, one MPI rank per core with `OMP_NUM_THREADS = 1`).
-- **Total compute.** ≈ 13 000 – 18 000 core-hours for the full
-  ensemble (16 sim-days × 2 560 runs × 16 ranks × ~22 min).
+- **Total compute.** ≈ 10 000 – 13 000 core-hours for the full
+  ensemble (32 sim-days × 960 runs × 16 ranks × ~45 min).
 - **Solver precision.** `float64` throughout the simulation; all
   output fields are downcast to `float32` at resample time.
 - **Cluster.** sciCORE @ Universität Basel, `scicore` partition,
