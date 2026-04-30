@@ -35,7 +35,7 @@ from pathlib import Path
 PARAM_GRID_MICKELIN: dict[str, tuple[float, ...]] = {
     "r_over_lambda": (2.0, 4.0, 7.0, 10.0),
     "kappa_lambda": (0.2, 0.4, 0.7, 1.0, 1.4, 1.8),
-    "seed": tuple(float(s) for s in range(40)),
+    "seed": tuple(float(s) for s in range(20)),
 }
 
 
