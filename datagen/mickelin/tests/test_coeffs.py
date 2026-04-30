@@ -82,19 +82,18 @@ def test_peak_ell_matches_scaling(r_over_lambda, kappa_lambda):
 
 
 @pytest.mark.parametrize("r_over_lambda", [6.0, 8.0, 10.0])
-@pytest.mark.parametrize("kappa_lambda", [0.3, 0.5, 0.7])
+@pytest.mark.parametrize("kappa_lambda", [0.3, 1.0, 1.5])
 def test_bandwidth_matches_kappa_R(r_over_lambda, kappa_lambda):
-    """Full width of the unstable band in ℓ-units should be ≈ πκR.
+    """Width of the unstable band in ℓ-units should be ≈ κR (SM Eq. 86).
 
-    The band in ``k`` runs from ``(π/Λ)(1 − κΛ/2)`` to ``(π/Λ)(1 + κΛ/2)``
-    with width ``πκ``. Converting to ``ℓ ≈ kR`` gives width ``πκR``.
+    Band edges in k are π/Λ ± κ/2; converting via ℓ ≈ kR gives width κR.
     """
     R, tau = 1.0, 1.0
     Lambda = R / r_over_lambda
     kappa = kappa_lambda / Lambda
     Gamma_0, Gamma_2, Gamma_4 = coefficients_from_RLkT(R, Lambda, kappa, tau)
 
-    ell = np.arange(2, 400)
+    ell = np.arange(2, 600)
     sigma = growth_rate_spectrum(ell, R, Gamma_0, Gamma_2, Gamma_4)
     positive = sigma > 0.0
     assert positive.any()
@@ -102,9 +101,7 @@ def test_bandwidth_matches_kappa_R(r_over_lambda, kappa_lambda):
     band_lo = ell[idx[0]]
     band_hi = ell[idx[-1]]
     observed_width = band_hi - band_lo
-    expected_width = math.pi * kappa * R  # = π · kappa_lambda · r_over_lambda
-    # Integer-ℓ discretisation plus the ℓ(ℓ+1)/R² vs (ℓ/R)² correction adds
-    # up to a few units to the observed width.
+    expected_width = kappa * R
     assert abs(observed_width - expected_width) <= 2.0, (
         f"band [{band_lo}, {band_hi}] width={observed_width}, "
         f"expected≈{expected_width:.2f}"
@@ -134,23 +131,14 @@ def test_peak_rate_equals_inverse_tau(r_over_lambda, kappa_lambda, tau):
 
 @pytest.mark.parametrize(
     "r_over_lambda, kappa_lambda",
-    [
-        (4.0, 0.3),
-        (4.0, 0.7),
-        (6.0, 0.5),
-        (8.0, 0.5),
-        (10.0, 0.7),
-    ],
+    [(4.0, 0.3), (4.0, 1.5), (6.0, 1.0), (8.0, 1.0), (10.0, 1.5)],
 )
 def test_unstable_band_ell_max(r_over_lambda, kappa_lambda):
-    """``unstable_band_ell_max`` should match ``ceil(R·k₊) + safety`` for the
-    Mickelin band-limit.
-    """
     R = 1.0
     Lambda = R / r_over_lambda
     kappa = kappa_lambda / Lambda
     safety = 4
-    expected_k_plus = (math.pi / Lambda) * (1.0 + kappa * Lambda / 2.0)
+    expected_k_plus = math.pi / Lambda + 0.5 * kappa
     expected = int(math.ceil(R * expected_k_plus)) + safety
     assert unstable_band_ell_max(R, Lambda, kappa, safety=safety) == expected
 
