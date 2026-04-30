@@ -4,6 +4,8 @@ import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
+import torch
+
 from torch.utils.data import DataLoader, DistributedSampler
 
 from fots.data.normalization import ZScoreNormalization
@@ -210,6 +212,9 @@ class WellDataModule(AbstractDataModule):
                 well_split_name="valid",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 storage_options=storage_kwargs,
@@ -230,6 +235,9 @@ class WellDataModule(AbstractDataModule):
                     well_split_name="valid",
                     include_filters=include_filters,
                     exclude_filters=exclude_filters,
+                    use_normalization=use_normalization,
+                    normalization_type=normalization_type,
+                    stats=stats,
                     meta_scalars=meta_scalars,
                     n_steps_input=n_steps_input,
                     storage_options=storage_kwargs,
@@ -247,6 +255,9 @@ class WellDataModule(AbstractDataModule):
                 well_split_name="test",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 storage_options=storage_kwargs,
@@ -266,6 +277,9 @@ class WellDataModule(AbstractDataModule):
                     well_split_name="test",
                     include_filters=include_filters,
                     exclude_filters=exclude_filters,
+                    use_normalization=use_normalization,
+                    normalization_type=normalization_type,
+                    stats=stats,
                     meta_scalars=meta_scalars,
                     n_steps_input=n_steps_input,
                     storage_options=storage_kwargs,
@@ -314,6 +328,9 @@ class WellDataModule(AbstractDataModule):
                 well_split_name="valid",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 n_steps_output=n_steps_output,
@@ -332,6 +349,9 @@ class WellDataModule(AbstractDataModule):
                 well_split_name="valid",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 max_rollout_steps=max_rollout_steps,
                 n_steps_input=n_steps_input,
@@ -352,6 +372,9 @@ class WellDataModule(AbstractDataModule):
                 well_split_name="test",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 n_steps_output=n_steps_output,
@@ -370,6 +393,9 @@ class WellDataModule(AbstractDataModule):
                 well_split_name="test",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 max_rollout_steps=max_rollout_steps,
                 n_steps_input=n_steps_input,
@@ -420,6 +446,26 @@ class WellDataModule(AbstractDataModule):
             field_names=tuple(flat_field_names),
             n_spatial_dims=md.n_spatial_dims,
         )
+
+    @property
+    def denormalize_fn(self):
+        """Return a callable that denormalizes (B,C,H,W) tensors back to physical units.
+
+        Uses the variable-field stats from the training dataset's normalizer.
+        Returns None when normalization is not active.
+        """
+        norm = getattr(self.train_dataset, "norm", None)
+        if norm is None:
+            return None
+        std = norm.flattened_stds["variable"]   # (C,)
+        mean = norm.flattened_means["variable"]  # (C,)
+
+        def _denorm(x: torch.Tensor) -> torch.Tensor:
+            s = std.to(x.device).view(1, -1, 1, 1)
+            m = mean.to(x.device).view(1, -1, 1, 1)
+            return x * s + m
+
+        return _denorm
 
     @property
     def is_distributed(self) -> bool:
@@ -739,6 +785,9 @@ class NotWellDataModule(WellDataModule):
                 well_split_name="valid",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 storage_options=storage_kwargs,
@@ -759,6 +808,9 @@ class NotWellDataModule(WellDataModule):
                     well_split_name="valid",
                     include_filters=include_filters,
                     exclude_filters=exclude_filters,
+                    use_normalization=use_normalization,
+                    normalization_type=normalization_type,
+                    stats=stats,
                     meta_scalars=meta_scalars,
                     n_steps_input=n_steps_input,
                     storage_options=storage_kwargs,
@@ -776,6 +828,9 @@ class NotWellDataModule(WellDataModule):
                 well_split_name="test",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 storage_options=storage_kwargs,
@@ -795,6 +850,9 @@ class NotWellDataModule(WellDataModule):
                     well_split_name="test",
                     include_filters=include_filters,
                     exclude_filters=exclude_filters,
+                    use_normalization=use_normalization,
+                    normalization_type=normalization_type,
+                    stats=stats,
                     meta_scalars=meta_scalars,
                     n_steps_input=n_steps_input,
                     storage_options=storage_kwargs,
@@ -842,6 +900,9 @@ class NotWellDataModule(WellDataModule):
                 well_split_name="valid",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 n_steps_output=n_steps_output,
@@ -860,6 +921,9 @@ class NotWellDataModule(WellDataModule):
                 well_split_name="valid",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 max_rollout_steps=max_rollout_steps,
                 n_steps_input=n_steps_input,
@@ -880,6 +944,9 @@ class NotWellDataModule(WellDataModule):
                 well_split_name="test",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 n_steps_input=n_steps_input,
                 n_steps_output=n_steps_output,
@@ -898,6 +965,9 @@ class NotWellDataModule(WellDataModule):
                 well_split_name="test",
                 include_filters=include_filters,
                 exclude_filters=exclude_filters,
+                use_normalization=use_normalization,
+                normalization_type=normalization_type,
+                stats=stats,
                 meta_scalars=meta_scalars,
                 max_rollout_steps=max_rollout_steps,
                 n_steps_input=n_steps_input,
