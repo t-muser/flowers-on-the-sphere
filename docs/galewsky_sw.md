@@ -246,7 +246,11 @@ fields (`h`, `vorticity`) are bicubic-interpolated at the back-rotated
 query grid (with periodic-wrap padding in longitude). The velocity pair
 `(u_phi, u_theta)` additionally gets the local-frame Jacobian applied
 per gridpoint, so its components are expressed in the **output** local
-east/south basis at every rotated location. Implementation in
+east/south basis at every rotated location. The PCG64 generator is
+keyed on `run_id` rather than on the `seed` axis value, so every one of
+the 960 trajectories receives a distinct rotation — the `seed` axis is
+purely the rotation-multiplicity index (see
+[Parameter space](#parameter-space)). Implementation in
 [`datagen/galewsky/so3.py`](../datagen/galewsky/so3.py); the
 postprocess step that consumes it is in
 [`datagen/galewsky/scripts/postprocess.py`](../datagen/galewsky/scripts/postprocess.py).
@@ -268,17 +272,17 @@ postprocess step that consumes it is in
 ## Parameter space
 
 Runs are laid out on an explicit tensor grid over five axes
-(5 · 4 · 4 · 4 · 8 = **2 560** runs). Runs are indexed `run_0000 …
-run_2559` in row-major order over the tuple
+(5 · 4 · 2 · 4 · 6 = **960** runs). Runs are indexed `run_0000 …
+run_0959` in row-major order over the tuple
 `(u_max, lat_center, h_hat, H, seed)`.
 
 | Parameter       | Units  | Values                                  | Count |
 | --- | --- | --- | --- |
 | `u_max`         | m/s    | 60, 70, 80, 90, 100                     | 5 |
 | `lat_center`    | °N     | 30, 40, 50, 60                          | 4 |
-| `h_hat`         | m      | 60, 120, 180, 240                       | 4 |
+| `h_hat`         | m      | 60, 240                                 | 2 |
 | `H`             | m      | 8 000, 10 000, 12 000, 14 000           | 4 |
-| `seed`          | —      | 0, 1, 2, 3, 4, 5, 6, 7                  | 8 |
+| `seed`          | —      | 0, 1, 2, 3, 4, 5                        | 6 |
 
 Jet half-width (`40°` full width), perturbation widths
 (`α = 1/3`, `β = 1/15`), grid resolution, and physics constants are
@@ -286,13 +290,17 @@ identical across the ensemble. The hard-coded perturbation longitude
 `lon_c = 0` (in the canonical frame) is also identical across the
 ensemble.
 
-The `seed` axis controls the per-trajectory SO(3) tilt `(ê, α)` and
-replaces the previous `lon_c` axis as the rotational-augmentation
-factor. Beyond shifting the instability trigger by a rotation, it also
-breaks the alignment between the physical rotation axis and the
-computational pole — so a model can no longer infer the Coriolis
-parameter from the grid latitude alone. The other four axes are
-physically meaningful.
+The `seed` axis is a rotation-multiplicity index: every
+`(u_max, lat_center, h_hat, H)` combination is replicated 6 times
+along it, and each replicate gets a distinct SO(3) tilt because the
+tilt is keyed on `run_id` (not on the `seed` value itself). All 960
+trajectories therefore receive 960 unique rotations. The other four
+axes are physically meaningful; `seed` exists purely to multiply the
+ensemble along the rotational direction so the model sees several
+rotations of every physics combination. The tilt also breaks the
+alignment between the physical rotation axis and the computational
+pole, so a model can no longer infer the Coriolis parameter from the
+grid latitude alone.
 
 ## Numerical-stability strategy
 
