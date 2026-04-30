@@ -33,8 +33,8 @@ from pathlib import Path
 # Parameter grid (4 · 3 · 40 = 480 runs). Keep axes in this order because the
 # run index is computed row-major over them.
 PARAM_GRID_MICKELIN: dict[str, tuple[float, ...]] = {
-    "r_over_lambda": (4.0, 6.0, 8.0, 10.0),
-    "kappa_lambda": (0.1, 0.15, 0.25),
+    "r_over_lambda": (2.0, 4.0, 7.0, 10.0),
+    "kappa_lambda": (0.2, 0.4, 0.7, 1.0, 1.4, 1.8),
     "seed": tuple(float(s) for s in range(40)),
 }
 
