@@ -61,11 +61,9 @@ SOLVER_RC=$?
 set -e
 
 if [ "${SOLVER_RC}" -ne 0 ]; then
-    if [ -f "${ZARR_OUT}.FAILED" ]; then
-        cp -f "${ZARR_OUT}.FAILED" "${FAIL_MARKER}"
-    else
-        printf '{"run_id": %s, "solver_rc": %d}\n' "${SLURM_ARRAY_TASK_ID}" "${SOLVER_RC}" \
-            > "${FAIL_MARKER}"
+    if [ ! -f "${FAIL_MARKER}" ]; then
+        printf '{"run_id": %s, "solver_rc": %d, "exception": "Hard crash / SIGABRT"}\n' \
+            "${SLURM_ARRAY_TASK_ID}" "${SOLVER_RC}" > "${FAIL_MARKER}"
     fi
     echo "=== Solver failed (rc=${SOLVER_RC}); wrote ${FAIL_MARKER}"
     exit "${SOLVER_RC}"
