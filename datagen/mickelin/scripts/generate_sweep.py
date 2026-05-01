@@ -6,10 +6,10 @@ The parameter grid is a tensor product over three axes; runs are indexed
 stored in every config so downstream code can detect stale caches.
 
 Fixed non-dimensional scales: ``R = 1``, ``τ = 1``. Derived per run:
-``Λ = R / r_over_lambda`` and ``κ = kappa_lambda / Λ``. The Mickelin A-phase
-regime requires ``R⁻¹ < κ < Λ⁻¹`` — always satisfied by the default grid
-(``κ·R = kappa_lambda · r_over_lambda ≥ 1.2`` and
-``κΛ = kappa_lambda ≤ 0.7``).
+``Λ = R / r_over_lambda`` and ``κ = kappa_lambda / Λ``. The grid spans both
+A-phase (``R⁻¹ < κ < Λ⁻¹`` ⇔ ``κR > 1`` and ``κΛ < 1``) and the broad-band
+regime above (``κΛ ≥ 1``). The solver constraint ``κΛ < 2`` is satisfied at
+every grid point with ``κΛ ≤ 1.8`` at the upper edge.
 
 Run from anywhere — by default the script writes relative to the repo root
 and does NOT touch the data tree::
@@ -30,11 +30,15 @@ import json
 from pathlib import Path
 
 
-# Parameter grid (4 · 6 · 20 = 480 runs). Keep axes in this order because the
-# run index is computed row-major over them.
+# Parameter grid (4 · 5 · 20 = 400 runs). Keep axes in this order because the
+# run index is computed row-major over them. ``kappa_lambda = 0.2`` was dropped
+# after the corner sweep (job 10956613) showed unconditional blow-up at (r=2,
+# k=0.2) and ~80% blow-up at (r=10, k=0.2): the band is too narrow for the
+# Jacobian to spread energy out of the unstable modes, so the flow runs away
+# and the CFL constraint collapses dt to ~10⁻⁶.
 PARAM_GRID_MICKELIN: dict[str, tuple[float, ...]] = {
     "r_over_lambda": (2.0, 4.0, 7.0, 10.0),
-    "kappa_lambda": (0.2, 0.4, 0.7, 1.0, 1.4, 1.8),
+    "kappa_lambda": (0.4, 0.7, 1.0, 1.4, 1.8),
     "seed": tuple(float(s) for s in range(20)),
 }
 

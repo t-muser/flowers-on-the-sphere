@@ -2,16 +2,16 @@
 #SBATCH --job-name=mickelin-sweep
 #SBATCH --partition=scicore
 #SBATCH --qos=6hours
-#SBATCH --array=0-479
+#SBATCH --array=0-399
 #SBATCH --nodes=1
 #SBATCH --ntasks=16
 #SBATCH --cpus-per-task=1
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=datagen/mickelin/slurm/logs/sweep-%A_%a.out
 #SBATCH --error=datagen/mickelin/slurm/logs/sweep-%A_%a.err
 #
-# Mickelin GNS parameter sweep: 480 runs at production resolution
-# (Nphi=256, Ntheta=128), 130 τ simulated, snapshot cadence τ/5.
+# Mickelin GNS parameter sweep: 400 runs at production resolution
+# (Nphi=256, Ntheta=128), 65 τ simulated, snapshot cadence τ/5.
 # Each array task: Dedalus solve in job-local scratch, then resample and
 # write the final Zarr directly to the persistent group dataset path.
 #

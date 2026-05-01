@@ -190,8 +190,8 @@ coefficients `a_{ℓm}` are drawn from
 - `ℓ_init` is chosen **inside the unstable band**, derived per-run as
   `⌈R·k₊⌉ + 4 = ⌈πR/Λ · (1 + κΛ/2)⌉ + 4` (a few degrees above the
   upper band edge). For the production grid this is
-  `ℓ_init ∈ {18, 24, 31, 37}` for `r_over_lambda ∈ {4, 6, 8, 10}` at
-  `kappa_lambda = 0.5`. Seeding directly inside the actively unstable
+  `ℓ_init ∈ {11, 18, 28, 38}` for `r_over_lambda ∈ {2, 4, 7, 10}` at
+  `kappa_lambda = 0.4`. Seeding directly inside the actively unstable
   band saturates the nonlinear balance on an `O(τ)` timescale; the
   previous choice of `ℓ_init = 6` (well below the band) wasted tens of
   thousands of solver steps waiting for round-off to bootstrap the
@@ -225,15 +225,15 @@ This keeps each trajectory a deterministic function of the triple
 ## Parameter space
 
 Runs are laid out on an explicit tensor grid over three axes
-(`4 · 3 · 40 = 480` runs). Runs are indexed `run_0000 … run_0479` in
+(`4 · 6 · 20 = 480` runs). Runs are indexed `run_0000 … run_0479` in
 row-major order over the tuple
 `(r_over_lambda, kappa_lambda, seed)`.
 
-| Parameter        | Symbol          | Values                        | Count |
-| ---              | ---             | ---                           | ---   |
-| Sphere/vortex    | `r_over_lambda` | 4, 6, 8, 10                   | 4     |
-| Active bandwidth | `kappa_lambda`  | 0.3, 0.5, 0.7                 | 3     |
-| IC seed          | `seed`          | 0, 1, …, 39                   | 40    |
+| Parameter        | Symbol          | Values                              | Count |
+| ---              | ---             | ---                                 | ---   |
+| Sphere/vortex    | `r_over_lambda` | 2, 4, 7, 10                         | 4     |
+| Active bandwidth | `kappa_lambda`  | 0.2, 0.4, 0.7, 1.0, 1.4, 1.8        | 6     |
+| IC seed          | `seed`          | 0, 1, …, 19                         | 20    |
 
 Physics constants `R = 1` and `τ = 1` are fixed across the ensemble;
 the per-run derived parameters are `Λ = R / r_over_lambda`
@@ -242,17 +242,20 @@ coefficient map. `ℓ_init` is derived from `(R, Λ, κ)` so the IC always
 seeds inside the unstable band. Resolution and time horizon are
 identical across the ensemble.
 
-Every `(r_over_lambda, kappa_lambda)` combination lies strictly inside
-the A-phase regime `R⁻¹ < κ < Λ⁻¹`: `κR = kappa_lambda · r_over_lambda
-∈ [1.2, 7]` is comfortably `> 1`, and `κΛ = kappa_lambda ∈ [0.3, 0.7]
-< 1`.
+The grid intentionally spans all three Mickelin regimes rather than
+restricting to A-phase. The A-phase band `R⁻¹ < κ < Λ⁻¹` (equivalently
+`κR > 1` and `κΛ < 1`) covers the subset with `kappa_lambda ∈ {0.2,
+0.4, 0.7}` at sufficiently large `r_over_lambda`; the remaining
+combinations probe the laminar (`κR < 1`) and broad-band (`κΛ ≥ 1`)
+regimes. The solver constraint `κΛ < 2` (so that `k₋² > 0`) is satisfied
+at every grid point, with `κΛ ≤ 1.8` at the upper edge.
 
 ## Numerical-stability strategy
 
 1. **Preflight sweep** over the 8 extremes of the `r_over_lambda ×
    kappa_lambda` plane (all `r_over_lambda` × min/max `kappa_lambda`)
    at half resolution (`N_φ = 128, N_θ = 64`) for `20 τ` at `seed = 0`.
-   Confirms every corner of the active-band plane is numerically stable
+   Confirms every corner of the parameter plane is numerically stable
    before launching the full 480-run array.
 2. **CFL-adaptive `dt`** inside every run, with a hard ceiling
    `max_dt = 0.05 τ`.
@@ -317,7 +320,7 @@ print(ds)
 
 # Parameter lookup via the carried coords.
 a_phase_small = ds.sel(run=(ds.param_r_over_lambda == 4.0)
-                           & (ds.param_kappa_lambda == 0.3))
+                           & (ds.param_kappa_lambda == 0.4))
 ```
 
 ## Citation
