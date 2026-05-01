@@ -61,7 +61,7 @@ SOLVER_RC=$?
 set -e
 
 if [ "${SOLVER_RC}" -ne 0 ]; then
-    if [ -f "${ZARR_OUT}.FAILED" ]; then
+    if [ ! -f "${FAIL_MARKER}" ]; then
         cp -f "${ZARR_OUT}.FAILED" "${FAIL_MARKER}"
     else
         printf '{"run_id": %s, "solver_rc": %d}\n' "${SLURM_ARRAY_TASK_ID}" "${SOLVER_RC}" \
