@@ -1,0 +1,12 @@
+{
+  "run_id": "short_run",
+  "run_name": "short_run",
+  "params": {
+    "tau_drag_days": 1.0,
+    "tau_atm_days": 40.0,
+    "tau_surf_days": 4.0,
+    "delta_T_y": 60.0,
+    "delta_theta_z": 10.0,
+    "seed": 0
+  }
+}
