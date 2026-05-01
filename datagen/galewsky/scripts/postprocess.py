@@ -148,7 +148,8 @@ def main() -> int:
                     help="Drop leading snapshots below this sim time and rebase "
                          "the remaining time axis to 0 (default: 4 days).")
     ap.add_argument("--seed", type=int, default=None,
-                    help="Override the SO(3) seed (defaults to params['seed']).")
+                    help="Override the SO(3) seed (defaults to run_id, so every "
+                         "trajectory gets a unique rotation).")
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
@@ -169,8 +170,8 @@ def main() -> int:
         run_id = entry.get("run_id")
 
     seed = args.seed
-    if seed is None and params is not None:
-        seed = int(params.get("seed", 0))
+    if seed is None and run_id is not None:
+        seed = int(run_id)
     elif seed is None:
         seed = 0
 

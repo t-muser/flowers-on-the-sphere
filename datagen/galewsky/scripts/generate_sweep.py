@@ -6,9 +6,11 @@ indexed ``run_0000 … run_NNNN`` in row-major order over the tuple
 is stored in every config so downstream code can detect stale caches.
 
 The previous ``lon_c`` axis is gone: each run's per-trajectory SO(3) tilt
-(parameterised by ``seed``) supplies the rotational diversity that lon_c
-used to provide, plus a non-grid-aligned rotation axis so a model can't
-exploit grid alignment as a shortcut.
+(keyed on ``run_id`` at postprocess time) supplies the rotational diversity
+that lon_c used to provide, plus a non-grid-aligned rotation axis so a
+model can't exploit grid alignment as a shortcut. The ``seed`` axis is
+just a multiplicity index — it produces 6 distinct ``run_id``s per physics
+combination, and so 6 distinct rotations.
 
 Run from anywhere — by default the script writes relative to the repo root
 (``configs/`` directory) and does NOT touch the data tree.
@@ -23,9 +25,10 @@ import json
 from pathlib import Path
 
 # Parameter grid (5 · 4 · 2 · 4 · 6 = 960 runs). Keep axes in this order
-# because the run index is computed row-major over them. ``seed`` controls
-# both the SO(3) tilt axis/angle (postprocess time) and any other per-run
-# stochastic choices.
+# because the run index is computed row-major over them. The SO(3) tilt
+# is keyed on ``run_id`` at postprocess time, so ``seed`` is just a
+# rotation-multiplicity index — it gives every physics combination 6
+# distinct ``run_id``s, hence 6 distinct rotations.
 PARAM_GRID: dict[str, tuple[float, ...]] = {
     "u_max": (60.0, 70.0, 80.0, 90.0, 100.0),
     "lat_center": (30.0, 40.0, 50.0, 60.0),

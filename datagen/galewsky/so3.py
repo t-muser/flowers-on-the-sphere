@@ -3,8 +3,9 @@
 The Dedalus shallow-water solver runs in the canonical frame (rotation axis
 = polar axis), because the Coriolis term ``2·Ω·zcross(u) = 2·Ω·sin(lat)·k̂×u``
 is only correct in that frame. To break grid alignment without breaking the
-solver, we draw a per-trajectory ``(axis, angle)`` from ``seed`` and apply
-the rotation to the saved ``(lat, lon)`` snapshots.
+solver, we draw a per-trajectory ``(axis, angle)`` keyed on the ``run_id``
+(so every run gets a unique rotation) and apply it to the saved ``(lat, lon)``
+snapshots.
 
 Mathematically, sampling the standard-frame field at the back-rotated grid
 points is equivalent to running the simulation on a tilted-axis sphere.

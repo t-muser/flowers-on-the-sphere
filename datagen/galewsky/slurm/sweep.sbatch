@@ -2,7 +2,8 @@
 #SBATCH --job-name=galewsky-sweep
 #SBATCH --partition=scicore
 #SBATCH --qos=6hours
-#SBATCH --array=1-959
+
+#SBATCH --array=0-959
 #SBATCH --nodes=1
 #SBATCH --ntasks=16
 #SBATCH --cpus-per-task=1

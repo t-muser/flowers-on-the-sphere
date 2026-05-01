@@ -19,11 +19,11 @@ wandb:
   tags: []
 
 # Override fields injected on top of the data config.
+# (worker counts live in each data config — names differ across datamodules.)
 data:
   n_steps_input: 4
   n_steps_output: 2
   max_rollout_steps: 20
-  data_workers: 8
 
 # Size the model output for one predicted frame regardless of how many GT
 # frames the loader returns; the AR phase rolls the model forward in code.
@@ -36,8 +36,8 @@ optimizer:
 
 lr_scheduler:
   _target_: fots.utils.build_warmup_cosine
-  warmup_epochs: 2
-  T_max: 50 # should match total epochs below (warmup + cosine)
+  warmup_epochs: 1
+  T_max: 25 # should match total epochs below (warmup + cosine)
   eta_min: 1.0e-5
 
 loss:
@@ -46,8 +46,8 @@ loss:
 
 trainer:
   _target_: fots.trainer.Trainer
-  epochs: 40
-  ar_epochs: 10
+  epochs: 20
+  ar_epochs: 5
   ar_steps: 2
   checkpoint_frequency: 1
   val_frequency: 1
