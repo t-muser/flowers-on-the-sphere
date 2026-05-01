@@ -269,7 +269,7 @@ class TestWriteDataDiagnostics:
         p = tmp_path / "data.diagnostics"
         write_data_diagnostics(p, snapshot_interval_s=interval_s)
         content = p.read_text()
-        match = re.search(r"frequency\s*=\s*([\d.eE+\-]+)", content)
+        match = re.search(r"frequency(?:\(\d+\))?\s*=\s*([\d.eE+\-]+)", content)
         assert match is not None
         assert float(match.group(1)) == pytest.approx(interval_s, rel=1e-6)
 

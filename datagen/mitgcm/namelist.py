@@ -225,19 +225,16 @@ def write_data_diagnostics(
     """
     content = f"""\
  &DIAGNOSTICS_LIST
-  dumpAtLast   = .TRUE.,
-  diag_mnc     = .FALSE.,
+  dumpAtLast    = .TRUE.,
+  diag_mnc      = .FALSE.,
+  fields(1:4,1) = 'UVEL    ','VVEL    ','THETA   ','ETAN    ',
+  fileName(1)   = 'atm_state',
+  frequency(1)  = {_fmt_real(snapshot_interval_s)},
+  timePhase(1)  = 0.,
  /
 
  &DIAG_STATIS_PARMS
-  stat_freq    = -1.,
- /
-
- &DIAGNOSTICS_LIST
-  fields(1:4)  = 'UVEL    ','VVEL    ','THETA   ','ETAN    ',
-  fileName     = 'atm_state',
-  frequency    = {_fmt_real(snapshot_interval_s)},
-  timePhase    = 0.,
+  stat_freq     = -1.,
  /
 """
     Path(path).write_text(content)

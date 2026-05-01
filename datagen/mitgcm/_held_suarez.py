@@ -118,7 +118,6 @@ def newtonian_cooling_rate(
     *,
     ka: float = HS_KA,
     ks: float = HS_KS,
-    kf: float = HS_KF,
     sigmab: float = HS_SIGMAB,
 ) -> np.ndarray:
     """Held-Suarez Newtonian cooling rate k_T(φ, σ) [1/s].

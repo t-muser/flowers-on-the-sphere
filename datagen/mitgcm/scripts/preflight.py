@@ -127,13 +127,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     if failed_marker.exists():
         failed_marker.unlink()
 
-    # Collect CLI overrides for RunConfig fields.
+    # Collect CLI overrides for RunConfig fields. Asserting membership turns
+    # a CLI/RunConfig field-name mismatch into an immediate error rather than
+    # silently dropping the override.
     rc_field_names = {f.name for f in fields(RunConfig)}
     overrides: dict = {}
     for dest in ("n_mpi", "spinup_days", "data_days", "snapshot_interval_days",
                  "pressure_hpa", "delta_t", "executable"):
+        assert dest in rc_field_names, f"Unknown RunConfig field: {dest!r}"
         val = getattr(args, dest, None)
-        if val is not None and dest in rc_field_names:
+        if val is not None:
             overrides[dest] = val
 
     try:
