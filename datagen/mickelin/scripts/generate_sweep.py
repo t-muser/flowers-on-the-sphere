@@ -30,12 +30,12 @@ import json
 from pathlib import Path
 
 
-# Parameter grid (4 · 3 · 40 = 480 runs). Keep axes in this order because the
+# Parameter grid (4 · 6 · 20 = 480 runs). Keep axes in this order because the
 # run index is computed row-major over them.
 PARAM_GRID_MICKELIN: dict[str, tuple[float, ...]] = {
-    "r_over_lambda": (4.0, 6.0, 8.0, 10.0),
-    "kappa_lambda": (0.3, 0.5, 0.7),
-    "seed": tuple(float(s) for s in range(40)),
+    "r_over_lambda": (2.0, 4.0, 7.0, 10.0),
+    "kappa_lambda": (0.2, 0.4, 0.7, 1.0, 1.4, 1.8),
+    "seed": tuple(float(s) for s in range(20)),
 }
 
 
@@ -84,8 +84,10 @@ def iter_preflight() -> list[dict]:
     across the whole sweep before launching the 480-run array.
     """
     r_over_lambdas = PARAM_GRID_MICKELIN["r_over_lambda"]
-    kappa_lambdas = (min(PARAM_GRID_MICKELIN["kappa_lambda"]),
-                     max(PARAM_GRID_MICKELIN["kappa_lambda"]))
+    kappa_lambdas = (
+        min(PARAM_GRID_MICKELIN["kappa_lambda"]),
+        max(PARAM_GRID_MICKELIN["kappa_lambda"]),
+    )
     runs: list[dict] = []
     for r_over_lambda in r_over_lambdas:
         for kappa_lambda in kappa_lambdas:
@@ -126,11 +128,15 @@ def _write_configs(
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
-        "--out", type=Path, default=Path("datagen/mickelin/configs"),
+        "--out",
+        type=Path,
+        default=Path("datagen/mickelin/configs"),
         help="Output directory for per-run JSON configs.",
     )
     ap.add_argument(
-        "--manifest", type=Path, default=None,
+        "--manifest",
+        type=Path,
+        default=None,
         help="Path for the top-level manifest (defaults to <out>/manifest.json).",
     )
     args = ap.parse_args()
@@ -146,8 +152,10 @@ def main() -> None:
         name_pattern="run_{run_id:04d}",
         grid=PARAM_GRID_MICKELIN,
     )
-    print(f"Wrote {len(sweep_runs)} sweep configs to {out_dir} "
-          f"and manifest to {manifest_path}.")
+    print(
+        f"Wrote {len(sweep_runs)} sweep configs to {out_dir} "
+        f"and manifest to {manifest_path}."
+    )
 
     preflight_runs = iter_preflight()
     preflight_dir = out_dir / "preflight"

@@ -57,16 +57,14 @@ def coefficients_from_RLkT(
     if kappa <= 0:
         raise ValueError(f"kappa must be positive, got {kappa}")
     if kappa * Lambda >= 2.0:
-        raise ValueError(
-            f"Require κΛ < 2 so that k₋² > 0, got κΛ={kappa * Lambda}"
-        )
+        raise ValueError(f"Require κΛ < 2 so that k₋² > 0, got κΛ={kappa * Lambda}")
     if tau <= 0:
         raise ValueError(f"tau must be positive, got {tau}")
 
-    K = 1.0 / R ** 2
+    K = 1.0 / R**2
     kc = math.pi / Lambda
-    k_minus_sq = kc ** 2 * (1.0 - kappa * Lambda / 2.0) ** 2
-    k_plus_sq = kc ** 2 * (1.0 + kappa * Lambda / 2.0) ** 2
+    k_minus_sq = (kc - 0.5 * kappa) ** 2
+    k_plus_sq = (kc + 0.5 * kappa) ** 2
 
     X_lo = 4.0 * K - k_plus_sq
     X_hi = 4.0 * K - k_minus_sq
@@ -82,9 +80,9 @@ def coefficients_from_RLkT(
     # unchanged.
     ell_max = max(int(4.0 * math.pi * R / Lambda), 64)
     ell = np.arange(1, ell_max + 1, dtype=np.float64)
-    k_sq = ell * (ell + 1.0) / R ** 2
+    k_sq = ell * (ell + 1.0) / R**2
     x = -k_sq + 4.0 * K
-    f_raw = Gamma_0 - Gamma_2 * x + Gamma_4 * x ** 2
+    f_raw = Gamma_0 - Gamma_2 * x + Gamma_4 * x**2
     sigma_raw = f_raw * (2.0 * K - k_sq)
     sigma_peak = float(np.max(sigma_raw))
     if sigma_peak <= 0.0:
@@ -110,28 +108,25 @@ def growth_rate_spectrum(
     ``coefficients_from_RLkT`` map against the Mickelin band-limited design.
     """
     ell = np.asarray(ell, dtype=np.float64)
-    K = 1.0 / R ** 2
-    k_sq = ell * (ell + 1.0) / R ** 2
+    K = 1.0 / R**2
+    k_sq = ell * (ell + 1.0) / R**2
     x = -k_sq + 4.0 * K
-    f = Gamma_0 - Gamma_2 * x + Gamma_4 * x ** 2
+    f = Gamma_0 - Gamma_2 * x + Gamma_4 * x**2
     return f * (2.0 * K - k_sq)
 
 
-def unstable_band_ell_max(R: float, Lambda: float, kappa: float, safety: int = 4) -> int:
+def unstable_band_ell_max(
+    R: float, Lambda: float, kappa: float, safety: int = 4
+) -> int:
     """Maximum ``ℓ`` covered by the Mickelin unstable band, plus a safety margin.
 
-    The unstable band in wavenumber is
-    ``k₊ = (π/Λ)·(1 + κΛ/2)``; converting to spherical-harmonic degree via
-    ``ℓ ≈ k·R`` and rounding up gives the smallest ``ℓ_init`` that already
-    seeds the linearly-fastest-growing modes. Adding ``safety`` margin pads
-    a few degrees above the band edge so the initial spectrum doesn't have
-    to climb up to the peak from below.
+    Band edge in k: k₊ = π/Λ + κ/2 (consistent with Mickelin SM).
     """
     if Lambda <= 0:
         raise ValueError(f"Lambda must be positive, got {Lambda}")
     if kappa <= 0:
         raise ValueError(f"kappa must be positive, got {kappa}")
-    k_plus = (math.pi / Lambda) * (1.0 + kappa * Lambda / 2.0)
+    k_plus = math.pi / Lambda + 0.5 * kappa
     return int(math.ceil(R * k_plus)) + int(safety)
 
 
@@ -155,7 +150,9 @@ def set_initial_conditions(
     excluded so that the seed projects strictly onto the non-trivial part
     of the vorticity space.
     """
-    phi, theta = dist.local_grids(basis)  # broadcast shapes (Nphi_local, 1), (1, Ntheta_local)
+    phi, theta = dist.local_grids(
+        basis
+    )  # broadcast shapes (Nphi_local, 1), (1, Ntheta_local)
     omega_grid = np.zeros(np.broadcast_shapes(phi.shape, theta.shape), dtype=np.float64)
 
     rng = np.random.Generator(np.random.PCG64(int(seed)))
