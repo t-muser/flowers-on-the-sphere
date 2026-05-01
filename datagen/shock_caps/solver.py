@@ -58,10 +58,12 @@ def run_simulation(
         ``field_names`` : list of channel names.
     """
     seed = int(params["seed"])
+    K = int(params["K"])
+    delta = float(params["delta"])
     logger.info(
-        "Starting run: seed=%d Nx=%d Ny=%d Nlat=%d Nlon=%d "
+        "Starting run: seed=%d K=%d delta=%g Nx=%d Ny=%d Nlat=%d Nlon=%d "
         "stop_sim_time=%g snapshot_dt=%g sub_samples=%d",
-        seed, Nx, Ny, Nlat, Nlon, stop_sim_time, snapshot_dt, sub_samples,
+        seed, K, delta, Nx, Ny, Nlat, Nlon, stop_sim_time, snapshot_dt, sub_samples,
     )
 
     t0 = time.time()
@@ -93,6 +95,8 @@ def run_simulation(
     fill_ic(
         h0, momx0, momy0, momz0,
         seed=seed,
+        K=K,
+        delta=delta,
         lat_centers=lat_cell,
         lon_centers=lon_cell,
         xlower=xlower, ylower=ylower, dx=dx, dy=dy,

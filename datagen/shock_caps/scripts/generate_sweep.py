@@ -1,8 +1,9 @@
 """Emit one JSON config per run plus a top-level manifest.
 
-Single-axis sweep over ``seed`` (0–499). Each seed determines the K cap
-centres, radii, per-cap states, and background state for the cap-Riemann
-IC. Total: 500 runs.
+Three-axis grid over ``(K, delta, seed)``: 5 cap counts × 5 velocity-
+strength values × 20 seeds = 500 runs. Iteration nests
+``K → delta → seed`` so each ``(K, delta)`` block is contiguous in the
+SLURM array, which keeps any per-block failure pattern easy to spot.
 """
 
 from __future__ import annotations
@@ -13,8 +14,10 @@ import json
 from pathlib import Path
 
 
-PARAM_GRID: dict[str, tuple[float, ...]] = {
-    "seed": tuple(float(s) for s in range(500)),
+PARAM_GRID: dict[str, tuple] = {
+    "K": (1, 2, 4, 8, 16),
+    "delta": (0.0, 0.25, 0.5, 0.75, 1.0),
+    "seed": tuple(range(20)),
 }
 
 
@@ -25,8 +28,14 @@ def _hash_params(params: dict) -> str:
 
 def iter_grid() -> list[dict]:
     runs: list[dict] = []
-    for s in PARAM_GRID["seed"]:
-        runs.append({"seed": int(s)})
+    for K in PARAM_GRID["K"]:
+        for delta in PARAM_GRID["delta"]:
+            for seed in PARAM_GRID["seed"]:
+                runs.append({
+                    "seed": int(seed),
+                    "delta": float(delta),
+                    "K": int(K),
+                })
     return runs
 
 

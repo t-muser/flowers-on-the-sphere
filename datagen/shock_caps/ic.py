@@ -11,6 +11,11 @@ sphere — expanding bores, multi-shock collisions, and antipodal focus —
 without a separate ``SO(3)`` tilt step, because cap centres are already
 uniform on ``S²``.
 
+The flow-strength axis ``delta`` ∈ ``[0, 1]`` scales the velocity
+envelope only: ``u, v ∈ [-0.5·delta, 0.5·delta]``. Depth jumps and cap
+geometry are independent of ``delta``, so even ``delta = 0`` (rest-state
+caps) produces full-amplitude pressure-driven Riemann fans.
+
 Sub-cell antialiased classification: at IC time every solver cell is
 sub-sampled ``S × S`` times in computational coords; the cell IC is the
 mean of primitives ``(h, u_east, u_north)`` across sub-points, with
@@ -31,19 +36,15 @@ from datagen.shock_quadrants.geometry import (
 )
 
 
-N_CAPS: int = 4
-
 # h strictly positive (keeps h far from 0 to prevent blow-up at shock fronts).
-# Velocities subcritical: max Fr = 0.5 / sqrt(9.806 * 0.5) ≈ 0.23.
-CAP_STATE_RANGES: Dict[str, Tuple[float, float]] = {
-    "h": (0.5, 2.0),
-    "u": (-0.5, 0.5),
-    "v": (-0.5, 0.5),
-}
+# u, v ranges are the delta=1 envelope; the delta arg multiplies them at
+# draw time. Max Fr = 0.5·delta / sqrt(9.806 * 0.5) ≈ 0.23·delta.
+H_RANGE: Tuple[float, float] = (0.5, 2.0)
+VELOCITY_HALFWIDTH: float = 0.5
 
 # Angular cap radius range in radians (~17° to ~57°). Mean ~37° ⇒ each cap
-# covers ~17% of the sphere; with K=4 painted in order, the expected
-# total cap coverage ~50–70% leaves background pockets that interact with
+# covers ~17% of the sphere; the expected total cap coverage ~50–70% (at
+# K=4 painted in order) leaves background pockets that interact with
 # expanding/collapsing cap fronts.
 CAP_RADIUS_RANGE: Tuple[float, float] = (0.3, 1.0)
 
@@ -56,7 +57,19 @@ def _sample_unit_vector(rng: np.random.Generator) -> np.ndarray:
     return np.array([s * math.cos(phi), s * math.sin(phi), z], dtype=np.float64)
 
 
-def sample_caps(seed: int) -> Tuple[
+def _draw_state(rng: np.random.Generator, delta: float) -> Dict[str, float]:
+    """One ``(h, u, v)`` triple. ``u, v`` are scaled by ``delta``; at
+    ``delta = 0`` they are exactly zero (the multiplication is the only
+    use of the random draws, so this is a hard zero, not float slack).
+    """
+    h_lo, h_hi = H_RANGE
+    h = float(rng.uniform(h_lo, h_hi))
+    u = delta * float(rng.uniform(-VELOCITY_HALFWIDTH, VELOCITY_HALFWIDTH))
+    v = delta * float(rng.uniform(-VELOCITY_HALFWIDTH, VELOCITY_HALFWIDTH))
+    return {"h": h, "u": u, "v": v}
+
+
+def sample_caps(seed: int, K: int, delta: float) -> Tuple[
     List[Dict[str, float]],   # per-cap (h, u, v) states, length K
     List[np.ndarray],          # cap centres (unit vectors), length K
     List[float],               # cap radii (rad), length K
@@ -65,26 +78,21 @@ def sample_caps(seed: int) -> Tuple[
     """Draw cap centres, radii, per-cap states, and background state.
 
     Draw order (deterministic from ``seed``):
+        background (h, u, v)
         cap_0..cap_{K-1} centres (z, φ each)
         cap_0..cap_{K-1} radii
         cap_0..cap_{K-1} (h, u, v) states
-        background (h, u, v)
+
+    ``delta`` scales velocity amplitudes only (depth ranges are fixed).
+    ``K`` controls the number of caps; different ``(seed, K)`` pairs
+    draw independently.
     """
     rng = np.random.Generator(np.random.PCG64(int(seed)))
-    centers = [_sample_unit_vector(rng) for _ in range(N_CAPS)]
+    background = _draw_state(rng, delta)
+    centers = [_sample_unit_vector(rng) for _ in range(K)]
     r_lo, r_hi = CAP_RADIUS_RANGE
-    radii = [float(rng.uniform(r_lo, r_hi)) for _ in range(N_CAPS)]
-    states: List[Dict[str, float]] = []
-    for _ in range(N_CAPS):
-        s: Dict[str, float] = {}
-        for name in ("h", "u", "v"):
-            lo, hi = CAP_STATE_RANGES[name]
-            s[name] = float(rng.uniform(lo, hi))
-        states.append(s)
-    background: Dict[str, float] = {}
-    for name in ("h", "u", "v"):
-        lo, hi = CAP_STATE_RANGES[name]
-        background[name] = float(rng.uniform(lo, hi))
+    radii = [float(rng.uniform(r_lo, r_hi)) for _ in range(K)]
+    states = [_draw_state(rng, delta) for _ in range(K)]
     return states, centers, radii, background
 
 
@@ -120,6 +128,8 @@ def fill_ic(
     momz_out: np.ndarray,
     *,
     seed: int,
+    K: int,
+    delta: float,
     lat_centers: np.ndarray,
     lon_centers: np.ndarray,
     xlower: float,
@@ -136,7 +146,7 @@ def fill_ic(
     primitives ``(h, u_east, u_north)`` across sub-points, with momentum
     projected to 3-D Cartesian at the cell centre.
     """
-    states, centers, radii, background = sample_caps(seed)
+    states, centers, radii, background = sample_caps(seed, K, delta)
     # state_table[K] is the background; state_table[k<K] is cap k.
     state_table = states + [background]
     Nx, Ny = lat_centers.shape

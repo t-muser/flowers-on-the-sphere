@@ -6,14 +6,17 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=datagen/shock_caps/slurm/logs/sweep-%A_%a.out
 #SBATCH --error=datagen/shock_caps/slurm/logs/sweep-%A_%a.err
 #
-# Full parameter sweep: 500 runs (500 seeds) at production resolution
-# (Nx=512, Ny=256 mapped grid; Nlat=256, Nlon=512 output grid),
-# t_max = 1.5 non-dim time units, snapshot every 0.015. PyClaw is
-# OMP-parallel — one task, 16 threads, no MPI.
+# Full parameter sweep: 500 runs on the (K, delta, seed) grid
+# (5 cap counts × 5 velocity scalings × 20 seeds), at production
+# resolution (Nx=512, Ny=256 mapped grid; Nlat=256, Nlon=512 output
+# grid), t_max = 1.5 non-dim time units, snapshot every 0.015. PyClaw
+# is OMP-parallel — one task, 16 threads, no MPI. Walltime budget is
+# generous to cover the K=16 stride, where extra shock fronts tighten
+# the CFL early in each run.
 #
 # Before sbatch (on the login node):
 #   uv run --project datagen python -m datagen.shock_caps.scripts.generate_sweep

@@ -1,27 +1,34 @@
 # Shock Caps: Random-Cap Riemann Shallow Water Dynamics on the Sphere
 
 **One-line description.** A 500-trajectory ensemble of hyperbolic
-shallow-water dynamics on the 2-sphere, initialized with K=4 random
+shallow-water dynamics on the 2-sphere, initialized with $K$ random
 geodesic caps — each carrying an independent piecewise-constant fluid
 state — that produce multi-shock collisions, expanding bores, and
-antipodal focus without any grid-aligned symmetry.
+antipodal focus without any grid-aligned symmetry. The ensemble is
+laid out on a $(K, \delta, \text{seed})$ grid that exposes cap count
+and velocity-flow strength as explicit axes.
 
 **Extended description.** Each trajectory solves the rotation-free
 shallow water equations on a unit sphere. The initial condition places
-K=4 geodesic disks (spherical caps) at uniformly random locations on
+$K$ geodesic disks (spherical caps) at uniformly random locations on
 the sphere; each cap has a randomly drawn angular radius and a
-piecewise-constant primitive state $(h, u, v)$. Where caps overlap, a
-painter's algorithm gives precedence to higher-index caps. A background
-state covers any region not claimed by a cap. Because cap centres are
-drawn uniformly on $\mathbb{S}^2$ from the outset, no separate
-$SO(3)$ tilt step is required — the shock interfaces are already
-non-aligned with any computational axis. The resulting dynamics include
-expanding bores, multi-shock collisions at cap boundaries, and antipodal
+piecewise-constant primitive state $(h, u, v)$. The flow-strength
+parameter $\delta \in [0, 1]$ scales the velocity envelope only:
+$u, v \in [-0.5\delta, 0.5\delta]$. Depth jumps are independent of
+$\delta$, so even at $\delta=0$ the initial pressure imbalance drives
+full-amplitude Riemann fans; at $\delta=1$ caps additionally carry
+nontrivial advective momentum. Where caps overlap, a painter's
+algorithm gives precedence to higher-index caps. A background state
+covers any region not claimed by a cap. Because cap centres are drawn
+uniformly on $\mathbb{S}^2$ from the outset, no separate $SO(3)$ tilt
+step is required — the shock interfaces are already non-aligned with
+any computational axis. The resulting dynamics include expanding
+bores, multi-shock collisions at cap boundaries, and antipodal
 convergence as fronts wrap around the closed manifold. Compared to the
-shock-quadrants dataset, the cap geometry avoids the fourfold symmetry of
-equator/meridian partitioning and naturally generates a wider variety of
-partial-sphere Riemann configurations, including isolated island-like
-states and multi-region interactions.
+shock-quadrants dataset, the cap geometry avoids the fourfold symmetry
+of equator/meridian partitioning and naturally generates a wider
+variety of partial-sphere Riemann configurations, including isolated
+island-like states and multi-region interactions.
 
 ## Associated resources
 
@@ -116,25 +123,28 @@ leading `run` dimension with parameter arrays carried as `param_*` coords.
 
 ### 1. Random Cap Placement
 
-At $t=0$, $K=4$ geodesic disks (spherical caps) are placed on the unit
-sphere. Each cap $k \in \{0, \ldots, K-1\}$ is defined by:
+At $t=0$, $K$ geodesic disks (spherical caps) are placed on the unit
+sphere; $K$ is a grid axis (see "Parameter space" below). Each cap
+$k \in \{0, \ldots, K-1\}$ is defined by:
 
 - **Centre** $\hat{\mathbf{c}}_k \in \mathbb{S}^2$, drawn uniformly via the $(z, \varphi)$ parameterisation.
 - **Angular radius** $r_k \in [0.3, 1.0]$ rad ($\approx 17°$–$57°$), drawn uniformly. At the mean radius of $\approx 37°$, a single cap covers $\approx 17\%$ of the sphere.
-- **Primitive state** $(h_k, u_k, v_k)$ drawn uniformly from $h \in [0.5, 2.0]$, $u, v \in [-0.5, 0.5]$.
+- **Primitive state** $(h_k, u_k, v_k)$ with $h_k \in [0.5, 2.0]$ and $u_k, v_k \in [-0.5\delta, 0.5\delta]$, all drawn uniformly. The depth range is fixed; $\delta$ scales velocities only. At $\delta=0$ the cap is at rest with a pure depth perturbation; at $\delta=1$ the cap carries the full velocity envelope.
 
-A separate **background state** $(h_\text{bg}, u_\text{bg}, v_\text{bg})$, drawn from the same ranges, fills all points not claimed by any cap.
+A separate **background state** $(h_\text{bg}, u_\text{bg}, v_\text{bg})$, drawn from the same $\delta$-scaled ranges, fills all points not claimed by any cap.
 
-All six quantities (centre, radius, state) for all caps and the
-background are determined deterministically from the run's `seed`.
+For a given $(K, \delta, \text{seed})$ tuple all stochastic
+quantities — centres, radii, per-cap states, and the background — are
+determined deterministically from `seed`.
 
 ### 2. Painter's Algorithm
 
 Caps are assigned in index order $0 \to K-1$: a cell belongs to cap $k$
 if $\hat{\mathbf{p}} \cdot \hat{\mathbf{c}}_k \ge \cos r_k$, with
 higher-index caps overwriting lower-index ones in overlap regions.
-Expected total cap coverage at $K=4$ is roughly 50–70%, leaving
-background pockets that interact with the expanding cap fronts.
+Expected total cap coverage at $K=4$ is roughly 50–70%; at $K=1$ a
+single cap covers $\sim 17\%$ on average, and at $K=16$ the background
+becomes a thin connecting tissue between near-fully-tiled caps.
 
 ### 3. Sub-cell Antialiasing
 
@@ -148,10 +158,13 @@ solver a well-resolved initial shock width of $\sim 1$ FV cell.
 
 ### Regime
 
-The velocity bounds keep the initial flow subcritical:
-$\max\,\text{Fr} = 0.5 / \sqrt{g \cdot h_{\min}} \approx 0.23$. The
-depth is kept strictly positive ($h \ge 0.5$) throughout the parameter
-space to prevent blow-up at strong shock fronts.
+The $\delta$-scaled velocity bounds keep the initial flow strictly
+subcritical at all $\delta \in [0, 1]$:
+$\max\,\text{Fr} = 0.5\delta / \sqrt{g \cdot h_{\min}} \approx 0.23\delta$,
+peaking at $\approx 0.23$ when $\delta=1$ and reaching $0$ at
+$\delta=0$. The depth lower bound ($h \ge 0.5$) is independent of
+$\delta$, so positivity is preserved throughout the parameter space
+and shock fronts cannot drive $h$ to zero.
 
 ## Physical setup
 
@@ -162,16 +175,25 @@ space to prevent blow-up at strong shock fronts.
 
 ## Parameter space
 
-Runs are laid out on a single axis (500 runs), indexed `run_0000 … run_0499` by `seed`.
+Runs are laid out on a three-axis grid, indexed `run_0000 … run_0499`
+in `K → delta → seed` order, so each $(K, \delta)$ block of 20 seeds is
+contiguous in the SLURM array.
 
 | Parameter | Symbol | Values | Count |
 | --- | --- | --- | --- |
-| IC seed | `seed` | $0, 1, \ldots, 499$ | 500 |
+| Number of caps | $K$ | $1, 2, 4, 8, 16$ | 5 |
+| Velocity scaling | $\delta$ | $0.0, 0.25, 0.5, 0.75, 1.0$ | 5 |
+| IC seed | `seed` | $0, 1, \ldots, 19$ | 20 |
+| **Total runs** | | | **500** |
 
-The `seed` dictates all stochastic quantities: cap centres, radii,
-per-cap states, and the background state. Because cap centres are
-uniformly distributed on $\mathbb{S}^2$ by construction, no additional
-$SO(3)$ tilt parameter is needed.
+For a given $(K, \delta)$ block, `seed` dictates all stochastic
+quantities: cap centres, radii, per-cap states, and the background
+state. Different $(K, \delta)$ blocks at the same `seed` draw their
+caps independently — there is no subset relationship between cap counts.
+Because cap centres are uniformly distributed on $\mathbb{S}^2$ by
+construction, no additional $SO(3)$ tilt parameter is needed —
+geometric variety comes from `seed` (placement) and $K$ (count); flow
+strength comes from $\delta$.
 
 ## Numerical-stability strategy
 
@@ -182,7 +204,7 @@ $SO(3)$ tilt parameter is needed.
 
 ## Computational details
 
-- **Per-run wall.** Estimated $\approx$ 10 – 30 min on one scicore compute node (OMP-parallel Clawpack, 16 threads).
+- **Per-run wall.** Estimated $\approx$ 10 – 30 min on one scicore compute node (OMP-parallel Clawpack, 16 threads). Wall time scales roughly with $K$ — the $K=16$ stride is the budget driver because extra shock fronts tighten the CFL early in each run.
 - **Total compute.** $\approx$ 100 – 250 core-hours for the full ensemble.
 - **Solver precision.** `float64` throughout the simulation; downcast to `float32` at resample time.
 - **Cluster.** sciCORE @ Universität Basel, `scicore` partition, `6hours` QoS, Easybuild `foss/2024a` toolchain.

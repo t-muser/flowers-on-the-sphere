@@ -110,7 +110,8 @@ def main() -> int:
         lon_target=lon_target,
         description=(
             "Shallow-water equations on the unit sphere, random spherical-cap "
-            "Riemann IC (K=4 caps, painter's algorithm, plus background), "
+            f"Riemann IC (K={params['K']} caps, delta={params['delta']} "
+            "velocity scaling, painter's algorithm, plus background), "
             "Calhoun-Helzel mapped sphere via PyClaw shallow_sphere_2D Riemann "
             "solver."
         ),
