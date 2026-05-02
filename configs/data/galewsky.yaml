@@ -3,9 +3,9 @@
 # Trajectory: 168 snapshots at 4 h cadence.
 data:
   _target_: fots.data.zarr_dataset.ZarrDataModule
-  root: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/galewsky-sw
+  root: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/galewsky-sw-v2
   dataset_name: galewsky
-  time_steps_per_run: 168
+  time_steps_per_run: 167
   dim_in: 4
   dim_out: 4
   spatial_resolution: [256, 512]

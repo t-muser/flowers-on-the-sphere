@@ -15,9 +15,11 @@ import time
 from typing import Any, Callable, Optional
 
 import torch
-from torch.utils.data import DataLoader
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data import DataLoader, DistributedSampler
 
 from fots.data.datamodule import AbstractDataModule
+from fots.dist import barrier, is_main_process
 from fots.metrics import (
     compute_loss_metrics,
     grad_norm,
@@ -136,10 +138,20 @@ class Trainer:
             return x.reshape(B, T * C, H, W)
         return x
 
+    def _unwrap_model(self) -> torch.nn.Module:
+        """Strip the DDP wrapper so save/load operates on the inner module
+        (DDP state dicts have an extra "module." key prefix that won't
+        match a freshly instantiated bare model on test_mode reloads)."""
+        if isinstance(self.model, DistributedDataParallel):
+            return self.model.module
+        return self.model
+
     def save_model(self, epoch: int, validation_loss: float, output_path: str):
+        if not is_main_process():
+            return
         checkpoint = {
             "epoch": epoch,
-            "model_state_dict": self.model.state_dict(),
+            "model_state_dict": self._unwrap_model().state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict() if self.optimizer else None,
             "validation_loss": validation_loss,
             "best_validation_loss": self.best_val_loss,
@@ -151,7 +163,7 @@ class Trainer:
     def load_checkpoint(self, checkpoint_path: str):
         logger.info(f"Loading checkpoint from {checkpoint_path}")
         ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
-        self.model.load_state_dict(ckpt["model_state_dict"])
+        self._unwrap_model().load_state_dict(ckpt["model_state_dict"])
         if self.optimizer is not None and ckpt.get("optimizer_state_dict") is not None:
             self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
         if self.lr_scheduler is not None and ckpt.get("lr_scheduler_state_dict") is not None:
@@ -381,9 +393,14 @@ class Trainer:
     def train(self):
         train_loader = self.datamodule.train_dataloader()
         val_loader = self.datamodule.val_dataloader()
-        rollout_val_loader = self.datamodule.rollout_val_dataloader()
+        # Rollout loaders are not distributed; only rank 0 runs them.
+        rollout_val_loader = (
+            self.datamodule.rollout_val_dataloader() if is_main_process() else None
+        )
         val_loss = self.starting_val_loss
         for epoch in range(self.starting_epoch, self.max_epoch + 1):
+            if isinstance(train_loader.sampler, DistributedSampler):
+                train_loader.sampler.set_epoch(epoch)
             if epoch <= self.epochs:
                 train_logs = self.train_one_epoch(epoch, train_loader)
             else:
@@ -398,7 +415,7 @@ class Trainer:
                 if self.best_val_loss is None or val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
                     self.save_model(epoch, val_loss, os.path.join(self.checkpoint_folder, "best.pt"))
-            if epoch % self.rollout_val_frequency == 0 or epoch == self.max_epoch:
+            if (epoch % self.rollout_val_frequency == 0 or epoch == self.max_epoch) and is_main_process():
                 rollout_logs = self.rollout_loop(
                     rollout_val_loader,
                     max_steps=self.max_rollout_steps,
@@ -407,6 +424,10 @@ class Trainer:
                 self.log_fn({**rollout_logs, "epoch": epoch}, epoch)
             if epoch % self.checkpoint_frequency == 0 or epoch == self.max_epoch:
                 self.save_model(epoch, val_loss, os.path.join(self.checkpoint_folder, "recent.pt"))
+            # rollout_loop and save_model run on rank 0 only; resync before
+            # the next epoch so the other ranks don't race ahead into a
+            # collective and trip the NCCL watchdog.
+            barrier()
         logger.info(
             f"Training complete. Final param norm: {param_norm(self.model.parameters()):.3f}"
         )

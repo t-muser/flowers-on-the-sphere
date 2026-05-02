@@ -7,9 +7,13 @@ All datasets share the same on-disk layout::
     <root>/test/run_XXXX.zarr
 
 Each zarr store has a ``fields`` variable with dims ``(time, field, lat, lon)``.
+If ``<root>/stats.json`` exists the loader z-scores each field (raw fields
+have radically different scales — h has σ≈530, vorticity σ≈2.5e-5 — so
+unnormalised MSE is dominated by h and learns nothing about vorticity).
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -19,7 +23,7 @@ from typing import Optional, Sequence
 import numpy as np
 import torch
 import xarray as xr
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, DistributedSampler
 
 from fots.data.datamodule import AbstractDataModule
 
@@ -74,6 +78,8 @@ class _ZarrWindowDataset(Dataset):
         time_steps_per_run: int,
         full_trajectory: bool = False,
         max_rollout_steps: Optional[int] = None,
+        norm_mean: Optional[np.ndarray] = None,
+        norm_std: Optional[np.ndarray] = None,
     ):
         self.split_dir = Path(split_dir)
         self.run_ids = list(run_ids)
@@ -81,6 +87,14 @@ class _ZarrWindowDataset(Dataset):
         self.n_steps_output = int(n_steps_output)
         self.time_steps_per_run = int(time_steps_per_run)
         self.full_trajectory = bool(full_trajectory)
+        # Per-channel z-score stats (shape (1, C, 1, 1) for broadcast over
+        # (T, C, H, W)). None disables normalization.
+        self._norm_mean = (
+            norm_mean.reshape(1, -1, 1, 1).astype(np.float32) if norm_mean is not None else None
+        )
+        self._norm_std = (
+            norm_std.reshape(1, -1, 1, 1).astype(np.float32) if norm_std is not None else None
+        )
 
         if self.full_trajectory:
             if max_rollout_steps is None:
@@ -130,9 +144,17 @@ class _ZarrWindowDataset(Dataset):
             time=slice(t0 + self.n_steps_input, t0 + self.n_steps_input + self.n_steps_output)
         ).to_numpy().astype(np.float32, copy=False)
 
+        if self._norm_mean is not None:
+            x = (x - self._norm_mean) / self._norm_std
+            y = (y - self._norm_mean) / self._norm_std
+
+        # `torch.from_numpy(x)` aliases x's buffer; if x came out of an xarray
+        # zarr-backed array its storage is non-resizable and the DataLoader's
+        # pin_memory collator will trip "Trying to resize storage that is not
+        # resizable". `torch.tensor(x)` allocates a fresh resizable storage.
         return {
-            "input_fields": torch.from_numpy(x),
-            "output_fields": torch.from_numpy(y),
+            "input_fields": torch.tensor(x),
+            "output_fields": torch.tensor(y),
         }
 
 
@@ -182,9 +204,13 @@ class ZarrDataModule(AbstractDataModule):
         max_rollout_steps: Optional[int] = None,
         num_workers: int = 0,
         dataset_name: str = "zarr",
+        rank: int = 0,
+        world_size: int = 1,
     ):
         self.root = Path(root)
         self.batch_size = int(batch_size)
+        self.rank = int(rank)
+        self.world_size = int(world_size)
         self.n_steps_input = int(n_steps_input)
         self.n_steps_output = int(n_steps_output)
         self.max_rollout_steps = max_rollout_steps
@@ -199,6 +225,36 @@ class ZarrDataModule(AbstractDataModule):
             grid=grid,
             field_names=tuple(field_names),
         )
+
+        # Auto-load <root>/stats.json if present, ordered to match field_names.
+        # _norm_*_t are torch tensors used by denormalize_fn; _norm_*_np feed
+        # the per-sample numpy normalization in _ZarrWindowDataset.
+        self._norm_mean_np: Optional[np.ndarray] = None
+        self._norm_std_np: Optional[np.ndarray] = None
+        self._norm_mean_t: Optional[torch.Tensor] = None
+        self._norm_std_t: Optional[torch.Tensor] = None
+        stats_path = self.root / "stats.json"
+        if field_names and stats_path.is_file():
+            with open(stats_path) as f:
+                stats = json.load(f)
+            try:
+                means = np.array([float(stats[n]["mean"]) for n in field_names], dtype=np.float32)
+                stds = np.array([float(stats[n]["std"]) for n in field_names], dtype=np.float32)
+            except KeyError as e:
+                logger.warning("stats.json missing entry for %s; skipping normalization", e)
+            else:
+                self._norm_mean_np = means
+                self._norm_std_np = stds
+                self._norm_mean_t = torch.from_numpy(means).reshape(1, -1, 1, 1)
+                self._norm_std_t = torch.from_numpy(stds).reshape(1, -1, 1, 1)
+                logger.info(
+                    "%s normalization stats from %s: mean=%s std=%s",
+                    dataset_name, stats_path,
+                    np.array2string(means, precision=3),
+                    np.array2string(stds, precision=3),
+                )
+        else:
+            logger.info("%s: no stats.json at %s; training on raw fields", dataset_name, stats_path)
 
         split_run_ids = {
             split: _scan_run_ids(self.root / split)
@@ -221,6 +277,8 @@ class ZarrDataModule(AbstractDataModule):
                 time_steps_per_run=self.time_steps_per_run,
                 full_trajectory=full_trajectory,
                 max_rollout_steps=self.max_rollout_steps,
+                norm_mean=self._norm_mean_np,
+                norm_std=self._norm_std_np,
             )
 
         self.train_dataset = _make("train")
@@ -228,6 +286,22 @@ class ZarrDataModule(AbstractDataModule):
         self.test_dataset = _make("test")
         self.rollout_val_dataset = _make("val", full_trajectory=True)
         self.rollout_test_dataset = _make("test", full_trajectory=True)
+
+    def denormalize_fn(self, x: torch.Tensor) -> torch.Tensor:
+        """Map a normalized (B, C, H, W) tensor back to physical units.
+
+        Used by ``Trainer.validation_loop`` / ``rollout_loop`` so the
+        spherical metric suite is reported in the same units as the
+        original Dedalus snapshots. Pass-through if no stats were found.
+        """
+        if self._norm_mean_t is None:
+            return x
+        mean = self._norm_mean_t.to(x.device, x.dtype)
+        std = self._norm_std_t.to(x.device, x.dtype)
+        if x.dim() == 5:  # (B, T, C, H, W) — broadcast over T
+            mean = mean.unsqueeze(0)
+            std = std.unsqueeze(0)
+        return x * std + mean
 
     @property
     def metadata(self) -> ZarrMetadata:
@@ -239,13 +313,31 @@ class ZarrDataModule(AbstractDataModule):
         *,
         shuffle: bool,
         batch_size: Optional[int] = None,
+        distribute: bool = True,
     ) -> DataLoader:
+        bs = batch_size if batch_size is not None else self.batch_size
+        if distribute and self.world_size > 1:
+            sampler = DistributedSampler(
+                dataset,
+                num_replicas=self.world_size,
+                rank=self.rank,
+                shuffle=shuffle,
+                drop_last=True,
+            )
+            return DataLoader(
+                dataset,
+                batch_size=bs,
+                sampler=sampler,
+                num_workers=self.num_workers,
+                pin_memory=False,
+                drop_last=True,
+            )
         return DataLoader(
             dataset,
-            batch_size=batch_size if batch_size is not None else self.batch_size,
+            batch_size=bs,
             shuffle=shuffle,
             num_workers=self.num_workers,
-            pin_memory=True,
+            pin_memory=False,
             drop_last=True,
         )
 
@@ -256,13 +348,15 @@ class ZarrDataModule(AbstractDataModule):
         return self._loader(self.val_dataset, shuffle=False)
 
     def rollout_val_dataloader(self) -> DataLoader:
-        return self._loader(self.rollout_val_dataset, shuffle=False, batch_size=1)
+        # Rollout eval runs on rank 0 only — keep batch_size=1 and skip
+        # distribution so the trainer can simply gate the call on is_main.
+        return self._loader(self.rollout_val_dataset, shuffle=False, batch_size=1, distribute=False)
 
     def test_dataloader(self) -> DataLoader:
         return self._loader(self.test_dataset, shuffle=False)
 
     def rollout_test_dataloader(self) -> DataLoader:
-        return self._loader(self.rollout_test_dataset, shuffle=False, batch_size=1)
+        return self._loader(self.rollout_test_dataset, shuffle=False, batch_size=1, distribute=False)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {self.root}>"

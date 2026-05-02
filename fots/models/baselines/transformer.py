@@ -34,8 +34,11 @@ import math
 import torch
 import torch.nn as nn
 from torch_harmonics.examples.models._layers import MLP, LayerNorm, DropPath, SequencePositionEmbedding, SpectralPositionEmbedding, LearnablePositionEmbedding
-from natten import NeighborhoodAttention2D as NeighborhoodAttention
 from functools import partial
+
+# natten is only required for the `attention_mode="neighborhood"` path; defer
+# the import so the rest of this module (and all classes that don't request
+# neighborhood attention) can be imported on environments without natten.
 
 
 class Encoder(nn.Module):
@@ -217,6 +220,7 @@ class AttentionBlock(nn.Module):
 
         # determine shape for neighborhood attention
         if attention_mode == "neighborhood":
+            from natten import NeighborhoodAttention2D as NeighborhoodAttention
             self.self_attn = NeighborhoodAttention(
                 chans,
                 kernel_size=attn_kernel_shape,

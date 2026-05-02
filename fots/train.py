@@ -30,6 +30,15 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
 from fots.data.datamodule import AbstractDataModule
+from fots.dist import (
+    cleanup_distributed,
+    get_local_rank,
+    get_rank,
+    get_world_size,
+    is_distributed,
+    is_main_process,
+    setup_distributed,
+)
 from fots.metrics import LatitudeWeightedMSELoss, latitude_weights
 from fots.trainer import Trainer
 from fots.utils import configure_experiment, get_experiment_name
@@ -75,8 +84,11 @@ def setup_wandb(cfg: DictConfig, experiment_folder: str, experiment_name: str) -
     """Initialise wandb if enabled, otherwise return a no-op logger.
 
     Returns a ``(metrics_dict, step) -> None`` callback the trainer uses
-    to push metrics per epoch.
+    to push metrics per epoch. Under DDP only rank 0 ever talks to wandb
+    so we don't get N parallel offline run dirs / N login attempts.
     """
+    if not is_main_process():
+        return lambda metrics, step: None
     wandb_cfg = OmegaConf.select(cfg, "wandb") or OmegaConf.create({})
     enabled = bool(OmegaConf.select(wandb_cfg, "enabled"))
     if not enabled:
@@ -120,11 +132,37 @@ def run_main(cfg: DictConfig):
     torch.backends.cudnn.benchmark = True
     torch.set_float32_matmul_precision("high")
 
-    cfg, experiment_name, experiment_folder, ckpt_folder, art_folder, viz_folder = (
-        configure_experiment(cfg, logger)
-    )
+    device = setup_distributed()
+    rank = get_rank()
+    world_size = get_world_size()
+    if not is_main_process():
+        # Demote non-zero ranks to WARNING so the console is one rank's
+        # voice; they'd otherwise interleave 4× duplicate per-batch lines.
+        logger.setLevel(logging.WARNING)
+
+    # Folder allocation must happen on a single rank — otherwise each rank
+    # races os.listdir + makedirs and they pick different sequence numbers,
+    # so train writes ckpt to /N while test ends up looking at /N+1. Rank 0
+    # decides; we broadcast the resolved (immutable) paths to every rank.
+    if is_main_process():
+        cfg, experiment_name, experiment_folder, ckpt_folder, art_folder, viz_folder = (
+            configure_experiment(cfg, logger)
+        )
+        bcast_payload = [experiment_name, experiment_folder, ckpt_folder, art_folder, viz_folder, cfg.trainer.get("checkpoint_path", "")]
+    else:
+        bcast_payload = [None, None, None, None, None, None]
+    if is_distributed():
+        import torch.distributed as dist
+        dist.broadcast_object_list(bcast_payload, src=0)
+        if not is_main_process():
+            experiment_name, experiment_folder, ckpt_folder, art_folder, viz_folder, ckpt_path = bcast_payload
+            if "trainer" in cfg:
+                cfg.trainer.checkpoint_path = ckpt_path
     logger.info(f"Experiment: {experiment_name} at {experiment_folder}")
-    logger.info(f"Config:\n{OmegaConf.to_yaml(cfg)}")
+    if is_main_process():
+        logger.info(f"Config:\n{OmegaConf.to_yaml(cfg)}")
+    if is_distributed():
+        logger.info(f"DDP: rank {rank}/{world_size} on {device}")
 
     if bool(OmegaConf.select(cfg, "test_mode")):
         recent_ckpt = osp.join(ckpt_folder, "recent.pt")
@@ -138,10 +176,20 @@ def run_main(cfg: DictConfig):
 
     logger.info(f"Instantiate datamodule {cfg.data._target_}")
     datamodule: AbstractDataModule = instantiate(cfg.data)
+    # Inject rank/world_size after construction so non-DDP-aware datamodules
+    # (e.g. swe_th) still instantiate fine. ZarrDataModule reads these in
+    # `_loader()` so post-hoc set is effective.
+    if hasattr(datamodule, "rank"):
+        datamodule.rank = rank
+    if hasattr(datamodule, "world_size"):
+        datamodule.world_size = world_size
 
     model = build_model(cfg, datamodule)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
+    if is_distributed():
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[get_local_rank()], find_unused_parameters=False,
+        )
 
     logger.info(f"Instantiate optimizer {cfg.optimizer._target_}")
     optimizer = instantiate(cfg.optimizer, params=model.parameters())
@@ -160,8 +208,9 @@ def run_main(cfg: DictConfig):
         logger.info(f"loss: lat-weighted MSE on {nlat}-pt {grid} grid")
     loss_fn = loss_fn.to(device) if isinstance(loss_fn, torch.nn.Module) else loss_fn
 
-    with open(osp.join(experiment_folder, "extended_config.yaml"), "w") as f:
-        OmegaConf.save(cfg, f)
+    if is_main_process():
+        with open(osp.join(experiment_folder, "extended_config.yaml"), "w") as f:
+            OmegaConf.save(cfg, f)
 
     log_fn = setup_wandb(cfg, experiment_folder, experiment_name)
 
@@ -183,9 +232,10 @@ def run_main(cfg: DictConfig):
     else:
         trainer.train()
 
-    if bool(OmegaConf.select(cfg, "wandb.enabled")):
+    if is_main_process() and bool(OmegaConf.select(cfg, "wandb.enabled")):
         import wandb
         wandb.finish()
+    cleanup_distributed()
 
 
 if __name__ == "__main__":
