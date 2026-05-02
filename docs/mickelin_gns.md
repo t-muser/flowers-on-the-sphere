@@ -161,14 +161,14 @@ solve at load time.
 
 ### Dataset size
 
-- **Number of trajectories.** 380 (after dropping the bursty
+- **Number of trajectories.** 760 (after dropping the bursty
   sub-A-phase row `(r_over_lambda=2, kappa_lambda=0.4)` from the
-  400-run grid — see *Parameter space* below).
+  800-run grid — see *Parameter space* below).
 - **Shape per trajectory.** `(time≈325, field=1, lat=128, lon=256)`.
 - **Per-trajectory size.** ≈ 42 MB (float32, uncompressed); ≈ 39 MB
   on-disk with Zarr's default compression.
-- **Total ensemble size.** ≈ 15 GB on-disk across all 380 trajectories.
-- **Consolidated shape.** `(run=380, time≈325, field=1, lat=128, lon=256)`.
+- **Total ensemble size.** ≈ 30 GB on-disk across all 760 trajectories.
+- **Consolidated shape.** `(run=760, time≈325, field=1, lat=128, lon=256)`.
 
 ### Storage format
 
@@ -234,7 +234,7 @@ This keeps each trajectory a deterministic function of the triple
 ## Parameter space
 
 Runs are laid out on an explicit tensor grid over three axes
-(`4 · 5 · 20 = 400` runs). Runs are indexed `run_0000 … run_0399` in
+(`4 · 5 · 40 = 800` runs). Runs are indexed `run_0000 … run_0799` in
 row-major order over the tuple
 `(r_over_lambda, kappa_lambda, seed)`.
 
@@ -242,7 +242,7 @@ row-major order over the tuple
 | ---              | ---             | ---                                 | ---   |
 | Sphere/vortex    | `r_over_lambda` | 2, 4, 7, 10                         | 4     |
 | Active bandwidth | `kappa_lambda`  | 0.4, 0.7, 1.0, 1.4, 1.8             | 5     |
-| IC seed          | `seed`          | 0, 1, …, 19                         | 20    |
+| IC seed          | `seed`          | 0, 1, …, 39                         | 40    |
 
 Physics constants `R = 1` and `τ = 1` are fixed across the ensemble;
 the per-run derived parameters are `Λ = R / r_over_lambda`
@@ -271,7 +271,7 @@ from the chained-turbulence target. The corresponding 20 zarr stores
 (run IDs `0000–0019`) may be present in the dataset directory but are
 listed under `excluded_run_ids` in `splits.json` and should not be
 used for training or evaluation. After exclusion the publishable
-ensemble has **380 trajectories**.
+ensemble has **760 trajectories**.
 
 ### Train / val / test splits
 
@@ -279,8 +279,8 @@ Splits are produced by
 [`datagen/mickelin/scripts/generate_split.py`](../datagen/mickelin/scripts/generate_split.py),
 which writes `splits.json` next to the manifest. The default strategy
 is stratified jointly on `(r_over_lambda, kappa_lambda)` so each split
-sees every kept regime cell in 80 / 10 / 10 proportions (16 / 2 / 2
-seeds per cell, 304 / 38 / 38 runs total). The `splits.json` payload
+sees every kept regime cell in 80 / 10 / 10 proportions (32 / 4 / 4
+seeds per cell, 608 / 76 / 76 runs total). The `splits.json` payload
 records the seed, the stratification keys, the exclusion criteria, and
 the per-split run-ID lists; `excluded_run_ids` is a separate field that
 makes the gap in the run-ID sequence explicit.
@@ -291,7 +291,7 @@ makes the gap in the run-ID sequence explicit.
    kappa_lambda` plane (all `r_over_lambda` × min/max `kappa_lambda`)
    at half resolution (`N_φ = 128, N_θ = 64`) for `20 τ` at `seed = 0`.
    Confirms every corner of the parameter plane is numerically stable
-   before launching the full 400-run array.
+   before launching the full 800-run array.
 2. **CFL-adaptive `dt`** inside every run, with a hard ceiling
    `max_dt = 0.05 τ`.
 3. **Per-run try/except** around the solver loop: on failure the
@@ -327,7 +327,7 @@ uv run --project datagen python -m datagen.mickelin.scripts.generate_sweep
 # Optional preflight array (8 corners, low resolution, seed 0).
 sbatch datagen/mickelin/slurm/preflight.sbatch
 
-# Full 400-run sweep (Nphi=256, Ntheta=128, 65 τ).
+# Full 800-run sweep (Nphi=256, Ntheta=128, 65 τ).
 sbatch datagen/mickelin/slurm/sweep.sbatch
 
 # Emit train/val/test splits, excluding the bursty (r=2, k=0.4) row.
