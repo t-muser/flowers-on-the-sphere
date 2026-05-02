@@ -3,7 +3,7 @@
 # Trajectory: 64 snapshots.
 data:
   _target_: fots.data.zarr_dataset.ZarrDataModule
-  root: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/cahn-hilliard-sphere
+  root: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/cahn-hilliard-sphere-v2
   dataset_name: cahn_hilliard
   time_steps_per_run: 64
   dim_in: 1

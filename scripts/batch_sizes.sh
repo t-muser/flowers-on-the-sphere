@@ -1,9 +1,9 @@
-# Per-(model, dataset) training batch size on 1xH200 (140 GiB), AR(x2) step.
+# Per-(model, dataset) training batch size on 1xGH200 (96 GiB), AR(x2) step.
+# Linearly scaled from the H200 (140 GiB) probe by 96/140 ≈ 0.686, since
+# activation memory dominates and scales linearly in batch.
 # Resolution is the only dataset-side knob that matters for memory; in/out
 # channel counts barely move the needle since hidden activations dominate.
-# Values are one tier below the empirical OOM cliff to leave headroom for
-# Adam state, allocator fragmentation, and val passes.
-# See scripts/probe_memory*.sbatch for the underlying sweeps.
+# See scripts/probe_memory*.sbatch for the underlying H200 probe.
 #
 # Usage:
 #     source scripts/batch_sizes.sh
@@ -20,20 +20,20 @@ declare -gA FOTS_DATA_RESOLUTION=(
 
 declare -gA FOTS_BATCH_SIZE=(
     # 256x512 (probe_memory.sbatch, PlanetSWE shape)
-    [fno:256x512]=40
-    [sfno:256x512]=38
-    [flower:256x512]=33
-    [zinnia:256x512]=14
-    [local_r_transformer:256x512]=11
-    [local_s2_transformer:256x512]=6
+    [fno:256x512]=27
+    [sfno:256x512]=26
+    [flower:256x512]=22
+    [zinnia:256x512]=9
+    [local_r_transformer:256x512]=7
+    [local_s2_transformer:256x512]=4
 
     # 128x256 (probe_memory_mickelin.sbatch)
-    [fno:128x256]=144
-    [sfno:128x256]=144
-    [flower:128x256]=112
-    [zinnia:128x256]=56
-    [local_r_transformer:128x256]=40
-    [local_s2_transformer:128x256]=20
+    [fno:128x256]=98
+    [sfno:128x256]=98
+    [flower:128x256]=76
+    [zinnia:128x256]=38
+    [local_r_transformer:128x256]=27
+    [local_s2_transformer:128x256]=13
 )
 
 fots_batch_size() {

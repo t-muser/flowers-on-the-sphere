@@ -1,11 +1,11 @@
-# Mickelin GNS vorticity ensemble (480 runs, 128x256 equiangular grid).
+# Mickelin GNS vorticity ensemble (760 runs, 128x256 equiangular grid).
 # Fields: vorticity (1 channel).
-# Trajectory: 325 snapshots.
+# Trajectory: 200 snapshots.
 data:
   _target_: fots.data.zarr_dataset.ZarrDataModule
-  root: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/mickelin-gns
+  root: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/mickelin-gns-v2
   dataset_name: mickelin
-  time_steps_per_run: 325
+  time_steps_per_run: 200
   dim_in: 1
   dim_out: 1
   spatial_resolution: [128, 256]

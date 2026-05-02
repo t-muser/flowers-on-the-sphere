@@ -234,7 +234,9 @@ class LatDeform2xDown(nn.Module):
         grid = sample_locs.reshape(1, self.H_p, self.W_p * self.n_points, 2)
         return grid.expand(batch_size, -1, -1, -1)
 
-    @torch.compile
+    # @torch.compile would close over self.proj's DDP-tracked weights and
+    # break under multi-forward AR (see _patch_torch_harmonics_compile in
+    # fots/train.py for the same class of bug).
     def forward(self, x):
         B, C_in, H, W = x.shape
         grid = self.get_sampling_grid(B, x.device)
@@ -285,7 +287,7 @@ class LatDeformSplat2xUp(nn.Module):
             nn.GELU(),
         )
 
-    @torch.compile
+    # See LatDeform2xDown.forward — same DDP/AR/@torch.compile pitfall.
     def forward(self, x, H_out=None, W_out=None):
         B, _, H_p, W_p = x.shape
         H = H_out if H_out is not None else self.down_block.H

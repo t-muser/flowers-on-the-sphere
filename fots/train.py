@@ -43,6 +43,26 @@ from fots.metrics import LatitudeWeightedMSELoss, latitude_weights
 from fots.trainer import Trainer
 from fots.utils import configure_experiment, get_experiment_name
 
+
+def _patch_torch_harmonics_compile() -> None:
+    # SpectralConvS2._contract_lwise is decorated with @torch.compile in
+    # torch_harmonics. Under DDP + AR (multi-forward, single-backward) the
+    # compiled callable's saved-for-backward references to self.weight end
+    # up at a version one ahead of what autograd captured during the first
+    # forward, raising "variable modified by inplace op: ... version V+1;
+    # expected V". Replacing the method with the bare einsum (same math,
+    # no compile) avoids the issue. Single-GPU never tripped this.
+    from torch_harmonics import spectral_convolution as _sc
+
+    def _contract_lwise_uncompiled(self, ac, bc):
+        return torch.einsum("bgixy,giox->bgoxy", ac, bc)
+
+    _sc.SpectralConvS2._contract_lwise = _contract_lwise_uncompiled
+
+
+_patch_torch_harmonics_compile()
+
+
 logger = logging.getLogger("fots")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
@@ -187,8 +207,17 @@ def run_main(cfg: DictConfig):
     model = build_model(cfg, datamodule)
     model = model.to(device)
     if is_distributed():
+        # broadcast_buffers=False: DDP's default per-iteration buffer sync
+        # writes into register_buffer tensors in-place. torch_harmonics SHT
+        # layers store their precomputed Legendre weights as buffers and
+        # capture them in the autograd graph via einsum, so the broadcast
+        # bumps the buffer's version *between* AR steps and backward fails
+        # with "variable modified by inplace operation: ... version V+1;
+        # expected V". Buffers here are deterministic from layer __init__
+        # args, so skipping the per-iter broadcast is correct.
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[get_local_rank()], find_unused_parameters=False,
+            model, device_ids=[get_local_rank()],
+            find_unused_parameters=False, broadcast_buffers=False,
         )
 
     logger.info(f"Instantiate optimizer {cfg.optimizer._target_}")

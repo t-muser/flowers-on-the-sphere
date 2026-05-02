@@ -89,6 +89,8 @@ srun --ntasks=1 --ntasks-per-node=1 --cpus-per-task=288 \
     # 4 ranks per node (one per GH200 GPU). torchrun sets RANK / LOCAL_RANK /
     # WORLD_SIZE / MASTER_ADDR / MASTER_PORT for every rank — fots.dist
     # picks them up to init NCCL.
+    # Checkpoints + wandb dir on Lustre scratch, not the NFS home share, so
+    # concurrent torch.save calls don't push us over the home-fs quota.
     if [ '${TEST_MODE:-false}' = 'true' ]; then
         torchrun --standalone --nnodes=1 --nproc_per_node=4 \\
             -m fots.train \\
@@ -96,6 +98,7 @@ srun --ntasks=1 --ntasks-per-node=1 --cpus-per-task=288 \
             optimizer.lr='${LR}' \\
             data.batch_size='${BATCH_SIZE}' \\
             name='${NAME}' \\
+            experiment_dir=/capstor/scratch/cscs/${USER}/fots-runs \\
             test_mode=true \\
             auto_resume=true
     else
@@ -105,6 +108,7 @@ srun --ntasks=1 --ntasks-per-node=1 --cpus-per-task=288 \
             optimizer.lr='${LR}' \\
             data.batch_size='${BATCH_SIZE}' \\
             name='${NAME}' \\
+            experiment_dir=/capstor/scratch/cscs/${USER}/fots-runs \\
             ${DATA_OVERRIDE}
     fi
   "

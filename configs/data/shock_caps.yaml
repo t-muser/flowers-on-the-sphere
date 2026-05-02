@@ -3,7 +3,7 @@
 # Trajectory: 101 snapshots.
 data:
   _target_: fots.data.zarr_dataset.ZarrDataModule
-  root: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/shock-caps
+  root: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/shock-caps-v2
   dataset_name: shock_caps
   time_steps_per_run: 101
   dim_in: 3
