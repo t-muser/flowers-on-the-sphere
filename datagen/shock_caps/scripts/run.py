@@ -122,6 +122,27 @@ def main() -> int:
         time_arr = data["time"]
         field_names = [str(n) for n in data["field_names"]]
 
+    if not np.isfinite(fields).all():
+        # PyClaw shallow-water can diverge mid-trajectory on extreme cap
+        # configurations (high K, mid delta); persisting the partial NaN
+        # array poisons downstream training. Mark the run failed instead.
+        nan_t = np.where(~np.isfinite(fields).reshape(fields.shape[0], -1).all(axis=1))[0]
+        with open(failed_marker, "w") as f:
+            json.dump({
+                "run_id": config.get("run_id"),
+                "config_path": str(args.config),
+                "params": params,
+                "reason": "non_finite_fields",
+                "first_bad_t": int(nan_t[0]) if nan_t.size else None,
+                "n_bad_t": int(nan_t.size),
+                "n_total_t": int(fields.shape[0]),
+            }, f, indent=2)
+            f.write("\n")
+        log.error("Solver produced non-finite fields (first bad t=%s); marking failed.",
+                  int(nan_t[0]) if nan_t.size else "n/a")
+        raw_path.unlink()
+        return 3
+
     lat_target = regular_lat_grid(args.nlat)
     lon_target = regular_lon_grid(args.nlon)
 

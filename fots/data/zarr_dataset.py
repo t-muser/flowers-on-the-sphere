@@ -42,6 +42,17 @@ def _scan_run_ids(split_dir: Path) -> list[int]:
     return sorted(ids)
 
 
+def _resolve_split_run_ids(root: Path) -> dict[str, list[int]]:
+    """Use ``splits.json`` if present (it may exclude solver-failed runs),
+    otherwise fall back to scanning each split directory."""
+    splits_path = root / "splits.json"
+    if splits_path.is_file():
+        with open(splits_path) as f:
+            splits = json.load(f)
+        return {s: sorted(int(i) for i in splits[s]) for s in ("train", "val", "test")}
+    return {s: _scan_run_ids(root / s) for s in ("train", "val", "test")}
+
+
 @dataclass
 class ZarrMetadata:
     """Metadata surface consumed by ``fots.train.build_model``."""
@@ -256,10 +267,7 @@ class ZarrDataModule(AbstractDataModule):
         else:
             logger.info("%s: no stats.json at %s; training on raw fields", dataset_name, stats_path)
 
-        split_run_ids = {
-            split: _scan_run_ids(self.root / split)
-            for split in ("train", "val", "test")
-        }
+        split_run_ids = _resolve_split_run_ids(self.root)
         logger.info(
             "%s splits from %s: train=%d val=%d test=%d",
             dataset_name, self.root,
