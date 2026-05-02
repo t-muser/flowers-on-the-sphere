@@ -19,12 +19,15 @@ from pathlib import Path
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--root", type=Path, required=True,
-                    help="Dataset root containing splits.json and processed/.")
+                    help="Dataset root containing splits.json (and the source dir).")
     ap.add_argument("--splits", type=Path, default=None,
                     help="Path to splits.json (defaults to <root>/splits.json).")
+    ap.add_argument("--src-dir", default="processed",
+                    help="Source subdir of <root> with run_XXXX.zarr files "
+                         "(default: processed).")
     args = ap.parse_args()
 
-    processed_dir = args.root / "processed"
+    processed_dir = args.root / args.src_dir
     if not processed_dir.is_dir():
         ap.error(f"Expected {processed_dir} to exist; has the dataset already been reorganized?")
 
