@@ -1,0 +1,15 @@
+# Dahlia — equiangular grid throughout, fixed sec(lat)-scaled 3×3 spherical
+# sampler for 2x down + paired splat 2x up; SphericalSelfWarp with 180°
+# polar fold inside FlowerBlocks. Hyperparameters match configs/models/zinnia.yaml
+# for direct comparison.
+model:
+  _target_: fots.models.flowers.zinnia.Dahlia
+  lifting_dim: 150
+  n_levels: 4
+  channel_multipliers: [1, 2, 4, 8]
+  num_heads: 50
+  groups: 50
+  dropout_rate: 0.0
+  tangent: false
+  polar_fold: true
+  coord_dim: 3

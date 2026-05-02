@@ -1,0 +1,19 @@
+# Dandelion — Flower-architecture U-Net with SphericalSelfWarp inside
+# FlowerBlocks (or TangentSelfWarp via tangent=true) and DISCO convolutions
+# (DiscreteContinuousConvS2 / -TransposeS2 from torch_harmonics) for 2x
+# down/up resampling. Hyperparameters match configs/models/zinnia.yaml for
+# direct comparison.
+model:
+  _target_: fots.models.flowers.dandelion.Dandelion
+  lifting_dim: 150
+  n_levels: 4
+  channel_multipliers: [1, 2, 4, 8]
+  num_heads: 50
+  groups: 50
+  dropout_rate: 0.0
+  tangent: false
+  polar_fold: true
+  coord_dim: 3
+  disco_kernel_shape: [3, 3]
+  disco_basis_type: piecewise linear
+  disco_groups: 1
