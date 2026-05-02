@@ -1,15 +1,25 @@
-"""Single-run driver: load JSON config, run PyClaw simulation, write Zarr.
+"""Single-run orchestrator: solver subprocess + zarr write.
 
-PyClaw runs in a single process (OMP-only), so this driver does not need
-``mpirun``::
+PyClaw runs in a single process (OMP-only), so this driver does not
+need ``mpirun``::
 
     uv run --project datagen python -m datagen.shock_caps.scripts.run \\
         --config datagen/shock_caps/configs/run_0000.json \\
         --out    $DATASET_ROOT/processed/run_0000.zarr
 
-On solver failure, writes ``<out>.FAILED`` with the exception and params
-so the SLURM array can keep going and ``consolidate.py`` can produce a
-failure report.
+This module **does not import Clawpack**. The simulation runs in a
+subprocess (``_solve.py``) that dumps raw fields to a ``.npz`` next to
+the zarr output; this orchestrator then reads the ``.npz`` and writes
+the zarr in a fresh, clean heap. The split keeps the Clawpack Fortran
+teardown corruption (chunk-header double-write left by the
+``classic2_sw_sphere`` / ``sw_sphere_problem`` destructors) from
+reaching xarray/zarr's allocation pattern, which previously turned
+roughly half of all runs into silent-failure ``corrupted size vs.
+prev_size`` aborts.
+
+On solver failure, writes ``<out>.FAILED`` with the exception and
+params so the SLURM array can keep going and ``consolidate.py`` can
+produce a failure report.
 """
 
 from __future__ import annotations
@@ -17,13 +27,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
-import traceback
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 
-from datagen.shock_caps.solver import run_simulation
 from datagen.resample import regular_lat_grid, regular_lon_grid, write_latlon_zarr
 
 
@@ -66,37 +75,52 @@ def main() -> int:
     if failed_marker.exists():
         failed_marker.unlink()
 
-    try:
-        result = run_simulation(
-            params,
-            Nlat=args.nlat,
-            Nlon=args.nlon,
-            Nx=args.nx,
-            Ny=args.ny,
-            snapshot_dt=args.snapshot_dt,
-            stop_sim_time=args.stop_sim_time,
-            cfl_desired=args.cfl_desired,
-            cfl_max=args.cfl_max,
-            sub_samples=args.sub_samples,
-        )
-    except Exception as exc:
-        log.exception("Simulation failed")
-        payload = {
-            "run_id": config.get("run_id"),
-            "config_path": str(args.config),
-            "params": params,
-            "exception": repr(exc),
-            "traceback": traceback.format_exc(),
-        }
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(failed_marker, "w") as f:
-            json.dump(payload, f, indent=2)
-            f.write("\n")
+    raw_path = out_path.with_name(out_path.stem + ".raw.npz")
+    raw_failed = raw_path.with_suffix(".FAILED")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if raw_path.exists():
+        raw_path.unlink()
+    if raw_failed.exists():
+        raw_failed.unlink()
+
+    cmd = [
+        sys.executable, "-m", "datagen.shock_caps.scripts._solve",
+        "--config", str(args.config),
+        "--raw-out", str(raw_path),
+        "--nlat", str(args.nlat),
+        "--nlon", str(args.nlon),
+        "--nx", str(args.nx),
+        "--ny", str(args.ny),
+        "--snapshot-dt", str(args.snapshot_dt),
+        "--stop-sim-time", str(args.stop_sim_time),
+        "--cfl-desired", str(args.cfl_desired),
+        "--cfl-max", str(args.cfl_max),
+        "--sub-samples", str(args.sub_samples),
+    ]
+    log.info("Spawning solver subprocess.")
+    rc = subprocess.run(cmd).returncode
+    log.info("Solver subprocess returned rc=%d.", rc)
+
+    if rc != 0 or not raw_path.exists():
+        if raw_failed.exists():
+            failed_marker.write_text(raw_failed.read_text())
+            raw_failed.unlink()
+        else:
+            with open(failed_marker, "w") as f:
+                json.dump({
+                    "run_id": config.get("run_id"),
+                    "config_path": str(args.config),
+                    "params": params,
+                    "solver_subprocess_rc": rc,
+                    "raw_present": raw_path.exists(),
+                }, f, indent=2)
+                f.write("\n")
         return 2
 
-    field_names = result["field_names"]
-    fields = result["fields"]   # (Nt, 3, Nlat, Nlon) float32
-    time_arr = result["time"]
+    with np.load(raw_path) as data:
+        fields = data["fields"]                    # (Nt, 3, Nlat, Nlon) float32
+        time_arr = data["time"]
+        field_names = [str(n) for n in data["field_names"]]
 
     lat_target = regular_lat_grid(args.nlat)
     lon_target = regular_lon_grid(args.nlon)
@@ -119,16 +143,11 @@ def main() -> int:
         params=params,
         time_units="non-dimensional",
     )
+    raw_path.unlink()
 
     log.info("Wrote %s", out_path)
     return 0
 
 
 if __name__ == "__main__":
-    rc = main()
-    # The Fortran extensions (classic2_sw_sphere, sw_sphere_problem) trigger a
-    # double-free in their compiled destructors at process teardown, turning a
-    # clean exit into SIGABRT (rc=134).  os._exit bypasses all atexit/destructor
-    # chains so the true return code reaches SLURM.
-    logging.shutdown()
-    os._exit(rc)
+    sys.exit(main())
