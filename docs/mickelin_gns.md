@@ -132,13 +132,19 @@ All times are reported in units of `τ`; all lengths in units of `R`.
 ### Temporal layout
 
 - **Snapshot cadence.** Every `τ/5` = `0.2 τ` of simulated time.
-- **Simulation length.** `130 τ`.
-- **Output window.** `30 τ ≤ t ≤ 130 τ`; the first `30 τ` (activity /
-  dissipation balance settling in) is discarded at resample time. The
-  remaining 500 snapshots span `0 – 100 τ` on the exported `time` axis
-  (rebased so the first kept snapshot is `t = 0`).
-- **Trajectory shape.** 500 snapshots per trajectory, `τ/5` apart.
-- **Time coordinate.** Stored as `τ` (`float64`).
+- **Simulation length.** `65 τ`.
+- **Output window.** Full simulation `0 ≤ t ≤ 65 τ` is kept (no warmup
+  trimming applied — see Note below).
+- **Trajectory shape.** ≈ 325 snapshots per trajectory, `τ/5` apart
+  (the exact count varies by ±1 between runs because CFL-adaptive `dt`
+  causes minor drift in the snapshot times).
+- **Time coordinate.** Stored as `float64`. Note: the time axis is
+  emitted by `datagen/resample.py`, which inherits Galewsky's
+  hour→second conversion (`1 sim time unit → 3600 s`). For Mickelin
+  this means stored `time` values are `τ * 3600` rather than `τ`;
+  multiply by `1/3600` to recover units of `τ`. (Tracked separately —
+  this is a known unit-conversion mismatch with the rest of the
+  Mickelin pipeline.)
 
 ### Available fields
 
@@ -155,11 +161,14 @@ solve at load time.
 
 ### Dataset size
 
-- **Number of trajectories.** 480.
-- **Shape per trajectory.** `(time=500, field=1, lat=128, lon=256)`.
-- **Per-trajectory size.** ≈ 65 MB (float32, uncompressed).
-- **Total ensemble size.** ≈ 31 GB.
-- **Consolidated shape.** `(run=480, time=500, field=1, lat=128, lon=256)`.
+- **Number of trajectories.** 380 (after dropping the bursty
+  sub-A-phase row `(r_over_lambda=2, kappa_lambda=0.4)` from the
+  400-run grid — see *Parameter space* below).
+- **Shape per trajectory.** `(time≈325, field=1, lat=128, lon=256)`.
+- **Per-trajectory size.** ≈ 42 MB (float32, uncompressed); ≈ 39 MB
+  on-disk with Zarr's default compression.
+- **Total ensemble size.** ≈ 15 GB on-disk across all 380 trajectories.
+- **Consolidated shape.** `(run=380, time≈325, field=1, lat=128, lon=256)`.
 
 ### Storage format
 
@@ -225,14 +234,14 @@ This keeps each trajectory a deterministic function of the triple
 ## Parameter space
 
 Runs are laid out on an explicit tensor grid over three axes
-(`4 · 6 · 20 = 480` runs). Runs are indexed `run_0000 … run_0479` in
+(`4 · 5 · 20 = 400` runs). Runs are indexed `run_0000 … run_0399` in
 row-major order over the tuple
 `(r_over_lambda, kappa_lambda, seed)`.
 
 | Parameter        | Symbol          | Values                              | Count |
 | ---              | ---             | ---                                 | ---   |
 | Sphere/vortex    | `r_over_lambda` | 2, 4, 7, 10                         | 4     |
-| Active bandwidth | `kappa_lambda`  | 0.2, 0.4, 0.7, 1.0, 1.4, 1.8        | 6     |
+| Active bandwidth | `kappa_lambda`  | 0.4, 0.7, 1.0, 1.4, 1.8             | 5     |
 | IC seed          | `seed`          | 0, 1, …, 19                         | 20    |
 
 Physics constants `R = 1` and `τ = 1` are fixed across the ensemble;
@@ -242,13 +251,39 @@ coefficient map. `ℓ_init` is derived from `(R, Λ, κ)` so the IC always
 seeds inside the unstable band. Resolution and time horizon are
 identical across the ensemble.
 
-The grid intentionally spans all three Mickelin regimes rather than
-restricting to A-phase. The A-phase band `R⁻¹ < κ < Λ⁻¹` (equivalently
-`κR > 1` and `κΛ < 1`) covers the subset with `kappa_lambda ∈ {0.2,
-0.4, 0.7}` at sufficiently large `r_over_lambda`; the remaining
-combinations probe the laminar (`κR < 1`) and broad-band (`κΛ ≥ 1`)
-regimes. The solver constraint `κΛ < 2` (so that `k₋² > 0`) is satisfied
-at every grid point, with `κΛ ≤ 1.8` at the upper edge.
+The grid intentionally spans both A-phase and broad-band regimes. The
+A-phase band `R⁻¹ < κ < Λ⁻¹` (equivalently `κR > 1` and `κΛ < 1`)
+covers cells with `kappa_lambda ∈ {0.4, 0.7}` at `r_over_lambda ≥ 4`
+and all `kappa_lambda ∈ {0.4, 0.7}` at `r_over_lambda = 7, 10`; cells
+with `kappa_lambda ≥ 1` lie in the broad-band regime above A-phase.
+The solver constraint `κΛ < 2` (so that `k₋² > 0`) is satisfied at
+every grid point, with `κΛ ≤ 1.8` at the upper edge.
+
+### Excluded cell
+
+The single sub-A-phase cell `(r_over_lambda=2, kappa_lambda=0.4)`
+(`κR = 0.8 < 1`) is **excluded from the published splits**. Its
+band is so narrow that only ℓ ≈ 5–7 is unstable (≈ 3 modes), so the
+flow has nowhere to send the energy injected by the linear instability
+— it bursts up, the Jacobian briefly drains it, and the cycle repeats.
+The dynamics is low-dimensional, IC-sensitive, and visually distinct
+from the chained-turbulence target. The corresponding 20 zarr stores
+(run IDs `0000–0019`) may be present in the dataset directory but are
+listed under `excluded_run_ids` in `splits.json` and should not be
+used for training or evaluation. After exclusion the publishable
+ensemble has **380 trajectories**.
+
+### Train / val / test splits
+
+Splits are produced by
+[`datagen/mickelin/scripts/generate_split.py`](../datagen/mickelin/scripts/generate_split.py),
+which writes `splits.json` next to the manifest. The default strategy
+is stratified jointly on `(r_over_lambda, kappa_lambda)` so each split
+sees every kept regime cell in 80 / 10 / 10 proportions (16 / 2 / 2
+seeds per cell, 304 / 38 / 38 runs total). The `splits.json` payload
+records the seed, the stratification keys, the exclusion criteria, and
+the per-split run-ID lists; `excluded_run_ids` is a separate field that
+makes the gap in the run-ID sequence explicit.
 
 ## Numerical-stability strategy
 
@@ -256,7 +291,7 @@ at every grid point, with `κΛ ≤ 1.8` at the upper edge.
    kappa_lambda` plane (all `r_over_lambda` × min/max `kappa_lambda`)
    at half resolution (`N_φ = 128, N_θ = 64`) for `20 τ` at `seed = 0`.
    Confirms every corner of the parameter plane is numerically stable
-   before launching the full 480-run array.
+   before launching the full 400-run array.
 2. **CFL-adaptive `dt`** inside every run, with a hard ceiling
    `max_dt = 0.05 τ`.
 3. **Per-run try/except** around the solver loop: on failure the
@@ -292,8 +327,12 @@ uv run --project datagen python -m datagen.mickelin.scripts.generate_sweep
 # Optional preflight array (8 corners, low resolution, seed 0).
 sbatch datagen/mickelin/slurm/preflight.sbatch
 
-# Full 480-run sweep (Nphi=256, Ntheta=128, 130 τ).
+# Full 400-run sweep (Nphi=256, Ntheta=128, 65 τ).
 sbatch datagen/mickelin/slurm/sweep.sbatch
+
+# Emit train/val/test splits, excluding the bursty (r=2, k=0.4) row.
+uv run --project datagen python -m datagen.mickelin.scripts.generate_split \
+    --exclude r_over_lambda=2.0,kappa_lambda=0.4
 
 # Consolidate per-run Zarrs into the final dataset.zarr.
 DATASET_ROOT=/scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/mickelin-gns
