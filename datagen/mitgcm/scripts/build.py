@@ -3,7 +3,7 @@
 This script:
 1. Creates ``datagen/mitgcm/build/`` and runs ``genmake2`` with the
    ``-mods datagen/mitgcm/code/`` flag so our custom SIZE.h, packages.conf
-   and hs_forc.* override the defaults.
+   and apply_forcing.F override the defaults.
 2. Runs ``make depend`` and ``make -j$(nproc)``.
 3. Generates the static ``datagen/mitgcm/input/`` files that are symlinked
    into every run directory: ``bathyFile.bin`` and a build-info JSON.
@@ -45,6 +45,10 @@ def _run(cmd: list[str], cwd: Path) -> None:
 def compile_mitgcm(mitgcm_root: Path, optfile: Path | None) -> None:
     """Run genmake2 + make to produce the mitgcmuv executable."""
     _BUILD.mkdir(parents=True, exist_ok=True)
+    for src in _CODE.iterdir():
+        dst = _BUILD / src.name
+        if dst.is_symlink():
+            dst.unlink()
 
     genmake2 = mitgcm_root / "tools" / "genmake2"
     if not genmake2.exists():

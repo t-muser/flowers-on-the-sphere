@@ -11,8 +11,8 @@ Python library. The internal implementation therefore:
      develop realistic jets and eddies from the initial state.
    - *Data collection* (``data_days``, daily snapshots) — restarts from the
      spin-up pickup file and writes the output Zarr.
-3. Reads the MDS binary output with ``xmitgcm.open_mdsdataset`` and
-   extracts fields at the configured pressure level plus surface pressure.
+3. Reads the tiled MDS binary output and extracts fields at the configured
+   pressure level plus surface pressure.
 4. Writes a ``(time, field, lat, lon)`` float32 Zarr via
    ``datagen.resample.write_latlon_zarr``.
 
@@ -22,13 +22,13 @@ has reached statistical equilibrium.
 
 Requires:
   - A compiled ``mitgcmuv`` executable (produced by ``scripts/build.py``).
-  - ``xmitgcm >= 0.5.2`` for reading MDS output.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field, replace
@@ -47,7 +47,11 @@ from datagen.mitgcm._constants import (
     HS_T0,
     P0,
 )
-from datagen.mitgcm.ic import write_bathymetry, write_temperature_ic
+from datagen.mitgcm.ic import (
+    pressure_thicknesses,
+    write_bathymetry,
+    write_temperature_ic,
+)
 from datagen.mitgcm.namelist import write_all_namelists
 from datagen.resample import write_latlon_zarr, regular_lat_grid, regular_lon_grid
 
@@ -97,8 +101,9 @@ class RunConfig:
     Nr: int = 20
     n_mpi: int = 4
 
-    # Time.
-    delta_t: float = 600.0
+    # Time. The 20-level pressure grid is free-surface limited; larger values
+    # such as 60-600 s blow up during the initial adjustment.
+    delta_t: float = 45.0
     spinup_days: float = 200.0
     data_days: float = 365.0
     snapshot_interval_days: float = 1.0
@@ -264,6 +269,9 @@ def _launch_mitgcm(
     """
     cmd = _build_mpirun_cmd(cfg) + ["./mitgcmuv"]
     log_path = run_dir / f"STDOUT_phase{phase}.log"
+    for pattern in ("STDOUT.????", "STDERR.????"):
+        for old_log in run_dir.glob(pattern):
+            old_log.unlink()
     t0 = time.time()
     logger.info("Phase %d: launching %s (cwd=%s)", phase, cmd, run_dir)
     with open(log_path, "w") as log_f:
@@ -281,6 +289,25 @@ def _launch_mitgcm(
             f"MITgcm phase {phase} exited with code {result.returncode}. "
             f"See {log_path}"
         )
+    fatal_lines: list[str] = []
+    for rank_log in sorted(run_dir.glob("STDERR.????")):
+        text = rank_log.read_text(errors="replace")
+        for line in text.splitlines():
+            if "*** ERROR ***" in line or "ABNORMAL END" in line:
+                fatal_lines.append(f"{rank_log.name}: {line}")
+                break
+    for rank_log in sorted(run_dir.glob("STDOUT.????")):
+        text = rank_log.read_text(errors="replace")
+        for line in text.splitlines():
+            if "PROGRAM MAIN: ends with fatal Error" in line:
+                fatal_lines.append(f"{rank_log.name}: {line}")
+                break
+    if fatal_lines:
+        detail = "\n".join(fatal_lines[:8])
+        raise RuntimeError(
+            f"MITgcm phase {phase} reported fatal errors despite exit code 0. "
+            f"See {log_path} and rank logs in {run_dir}.\n{detail}"
+        )
 
 
 def _find_diag_iters(run_dir: Path) -> list[int]:
@@ -288,26 +315,137 @@ def _find_diag_iters(run_dir: Path) -> list[int]:
     meta_files = sorted(run_dir.glob("atm_state.*.meta"))
     iters = []
     for p in meta_files:
-        # Filename: atm_state.0000086400.meta → 86400
-        stem = p.stem  # atm_state.0000086400
+        # Tiled filename: atm_state.0000086400.001.001.meta -> 86400
+        # Global filename: atm_state.0000086400.meta -> 86400
+        stem = p.stem
         parts = stem.split(".")
         if len(parts) >= 2:
             try:
-                iters.append(int(parts[-1]))
+                iters.append(int(parts[1]))
             except ValueError:
                 continue
-    return sorted(iters)
+    return sorted(set(iters))
 
 
-def _read_mitgcm_output(run_dir: Path, cfg: RunConfig):
-    """Read MDS diagnostic output with xmitgcm and return an xarray Dataset."""
-    try:
-        import xmitgcm
-    except ImportError as exc:
-        raise ImportError(
-            "xmitgcm is required to read MITgcm output. "
-            "Install it with: pip install xmitgcm"
-        ) from exc
+def _parse_mds_meta(path: Path) -> dict[str, Any]:
+    """Parse the small subset of MITgCM MDS metadata used by diagnostics."""
+    text = path.read_text()
+
+    def _int_value(name: str) -> int:
+        match = re.search(rf"{name}\s*=\s*\[\s*([0-9]+)\s*\]", text)
+        if match is None:
+            raise ValueError(f"{path}: missing {name}")
+        return int(match.group(1))
+
+    dim_match = re.search(r"dimList\s*=\s*\[(.*?)\];", text, re.S)
+    if dim_match is None:
+        raise ValueError(f"{path}: missing dimList")
+    dim_nums = [int(v) for v in re.findall(r"[-+]?\d+", dim_match.group(1))]
+    if len(dim_nums) % 3 != 0:
+        raise ValueError(f"{path}: malformed dimList")
+    dim_list = [
+        (dim_nums[i], dim_nums[i + 1], dim_nums[i + 2])
+        for i in range(0, len(dim_nums), 3)
+    ]
+
+    fields_match = re.search(r"fldList\s*=\s*\{(.*?)\};", text, re.S)
+    fields = []
+    if fields_match is not None:
+        fields = [
+            field.strip()
+            for field in re.findall(r"'([^']+)'", fields_match.group(1))
+        ]
+
+    prec_match = re.search(r"dataprec\s*=\s*\[\s*'([^']+)'\s*\]", text)
+    dataprec = prec_match.group(1).strip() if prec_match else "float32"
+
+    return {
+        "n_dims": _int_value("nDims"),
+        "dim_list": dim_list,
+        "dataprec": dataprec,
+        "nrecords": _int_value("nrecords"),
+        "time_step": _int_value("timeStepNumber"),
+        "fields": fields,
+    }
+
+
+def _mds_dtype(dataprec: str) -> np.dtype:
+    """Return the big-endian NumPy dtype for an MDS ``dataprec`` value."""
+    if dataprec == "float32":
+        return np.dtype(">f4")
+    if dataprec == "float64":
+        return np.dtype(">f8")
+    raise ValueError(f"Unsupported MDS dataprec: {dataprec}")
+
+
+def _read_mds_prefix(
+    run_dir: Path,
+    prefix: str,
+    iters: list[int],
+) -> dict[str, np.ndarray]:
+    """Read a tiled MITgCM diagnostics prefix into field arrays."""
+    fields: dict[str, np.ndarray] = {}
+
+    for t_idx, iter_num in enumerate(iters):
+        tile_metas = sorted(run_dir.glob(f"{prefix}.{iter_num:010d}.*.*.meta"))
+        if not tile_metas:
+            global_meta = run_dir / f"{prefix}.{iter_num:010d}.meta"
+            tile_metas = [global_meta] if global_meta.exists() else []
+        if not tile_metas:
+            raise FileNotFoundError(f"No {prefix}.{iter_num:010d}.*.meta files found")
+
+        for meta_path in tile_metas:
+            meta = _parse_mds_meta(meta_path)
+            dim_list = meta["dim_list"]
+            nx_g, x_start, x_end = dim_list[0]
+            ny_g, y_start, y_end = dim_list[1]
+            nx = x_end - x_start + 1
+            ny = y_end - y_start + 1
+            data_path = meta_path.with_suffix(".data")
+            raw = np.fromfile(data_path, dtype=_mds_dtype(meta["dataprec"]))
+            raw = raw.astype(np.float32, copy=False)
+
+            if meta["n_dims"] == 3:
+                nz_g, z_start, z_end = dim_list[2]
+                nz = z_end - z_start + 1
+                expected = meta["nrecords"] * nz * ny * nx
+                if raw.size != expected:
+                    raise ValueError(
+                        f"{data_path}: expected {expected} values, found {raw.size}"
+                    )
+                tile = raw.reshape((meta["nrecords"], nz, ny, nx))
+                for rec_idx, field_name in enumerate(meta["fields"]):
+                    arr = fields.setdefault(
+                        field_name,
+                        np.empty((len(iters), nz_g, ny_g, nx_g), dtype=np.float32),
+                    )
+                    arr[
+                        t_idx,
+                        z_start - 1:z_end,
+                        y_start - 1:y_end,
+                        x_start - 1:x_end,
+                    ] = tile[rec_idx]
+            elif meta["n_dims"] == 2:
+                expected = meta["nrecords"] * ny * nx
+                if raw.size != expected:
+                    raise ValueError(
+                        f"{data_path}: expected {expected} values, found {raw.size}"
+                    )
+                tile = raw.reshape((meta["nrecords"], ny, nx))
+                for rec_idx, field_name in enumerate(meta["fields"]):
+                    arr = fields.setdefault(
+                        field_name,
+                        np.empty((len(iters), ny_g, nx_g), dtype=np.float32),
+                    )
+                    arr[t_idx, y_start - 1:y_end, x_start - 1:x_end] = tile[rec_idx]
+            else:
+                raise ValueError(f"{meta_path}: unsupported nDims={meta['n_dims']}")
+
+    return fields
+
+
+def _read_mitgcm_output(run_dir: Path, cfg: RunConfig) -> dict[str, np.ndarray]:
+    """Read the MITgCM diagnostics needed for benchmark Zarr output."""
 
     iters = _find_diag_iters(run_dir)
     if not iters:
@@ -316,29 +454,29 @@ def _read_mitgcm_output(run_dir: Path, cfg: RunConfig):
             "Did the data-collection phase produce output?"
         )
 
-    ds = xmitgcm.open_mdsdataset(
-        str(run_dir),
-        iters=iters,
-        prefix=["atm_state"],
-        geometry="sphericalpolar",
-        read_grid=False,
-        delta_t=cfg.delta_t,
-        default_dtype=np.float32,
-    )
-    return ds
+    data = _read_mds_prefix(run_dir, "atm_state", iters)
+    data.update(_read_mds_prefix(run_dir, "atm_surf", iters))
+    del_r = pressure_thicknesses(cfg.Nr)
+    upper_edges = P0 - np.concatenate([[0.0], np.cumsum(del_r[:-1])])
+    data["pressure"] = (upper_edges - 0.5 * del_r).astype(np.float32)
+    data["time"] = np.asarray(iters, dtype=np.float64) * cfg.delta_t
+    return data
 
 
-def _extract_fields(ds, cfg: RunConfig) -> tuple[list[np.ndarray], list[str], np.ndarray]:
-    """Extract 2-D fields from the 3-D xmitgcm Dataset.
+def _extract_fields(
+    data: dict[str, np.ndarray],
+    cfg: RunConfig,
+) -> tuple[list[np.ndarray], list[str], np.ndarray]:
+    """Extract 2-D fields from the MITgCM diagnostic arrays.
 
     Returns:
         field_arrays: List of (Nt, Nlat, Nlon) float32 arrays.
         field_names:  Corresponding field name strings.
         time_arr:     Time coordinate in seconds since data-collection start.
     """
-    # Pressure at level centres; Z coordinate in xmitgcm sphericalpolar is [Pa].
-    p_target = cfg.pressure_hpa * 100.0  # hPa → Pa
-    z_vals = ds["Z"].values if "Z" in ds.coords else ds["Zmd000020"].values
+    # Pressure at model-level centres in Pa.
+    p_target = cfg.pressure_hpa * 100.0  # hPa -> Pa
+    z_vals = data["pressure"]
     k_idx = int(np.argmin(np.abs(z_vals - p_target)))
     p_actual_hpa = z_vals[k_idx] / 100.0
     logger.info(
@@ -346,10 +484,10 @@ def _extract_fields(ds, cfg: RunConfig) -> tuple[list[np.ndarray], list[str], np
         cfg.pressure_hpa, p_actual_hpa, k_idx,
     )
 
-    u  = ds["UVEL"].isel(Z=k_idx).values.astype(np.float32)
-    v  = ds["VVEL"].isel(Z=k_idx).values.astype(np.float32)
-    T  = ds["THETA"].isel(Z=k_idx).values.astype(np.float32)
-    ps = (ds["ETAN"].values + P0).astype(np.float32)  # ETAN = ps − p0
+    u  = data["UVEL"][:, k_idx, :, :].astype(np.float32)
+    v  = data["VVEL"][:, k_idx, :, :].astype(np.float32)
+    T  = data["THETA"][:, k_idx, :, :].astype(np.float32)
+    ps = (data["ETAN"] + P0).astype(np.float32)  # ETAN = ps - p0
 
     pressure_label = f"{cfg.pressure_hpa:.0f}hpa"
     field_arrays = [u, v, T, ps]
@@ -360,15 +498,8 @@ def _extract_fields(ds, cfg: RunConfig) -> tuple[list[np.ndarray], list[str], np
         "ps",
     ]
 
-    # Build time coordinate in seconds since data-collection start.
-    time_ns = ds["time"].values  # np.timedelta64 or np.datetime64 depending on version
-    # xmitgcm returns time as iteration × delta_t seconds from iter0.
-    # After restart, iter0 = spinup_steps so time starts at spinup_steps*delta_t.
-    # We rebase to start from 0.
-    if np.issubdtype(time_ns.dtype, np.timedelta64):
-        time_s = time_ns.astype("timedelta64[s]").astype(np.float64)
-    else:
-        time_s = time_ns.astype(np.float64)
+    # Iteration timestamps include restart offset; rebase to collection start.
+    time_s = data["time"].astype(np.float64)
     time_arr = time_s - time_s[0]
 
     return field_arrays, field_names, time_arr
