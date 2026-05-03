@@ -47,7 +47,11 @@ from datagen.mitgcm._constants import (
     HS_T0,
     P0,
 )
-from datagen.mitgcm.ic import write_bathymetry, write_temperature_ic
+from datagen.mitgcm.ic import (
+    pressure_thicknesses,
+    write_bathymetry,
+    write_temperature_ic,
+)
 from datagen.mitgcm.namelist import write_all_namelists
 from datagen.resample import write_latlon_zarr, regular_lat_grid, regular_lon_grid
 
@@ -97,8 +101,9 @@ class RunConfig:
     Nr: int = 20
     n_mpi: int = 4
 
-    # Time.
-    delta_t: float = 600.0
+    # Time. The 20-level pressure grid is free-surface limited; larger values
+    # such as 60-600 s blow up during the initial adjustment.
+    delta_t: float = 45.0
     spinup_days: float = 200.0
     data_days: float = 365.0
     snapshot_interval_days: float = 1.0
@@ -451,9 +456,9 @@ def _read_mitgcm_output(run_dir: Path, cfg: RunConfig) -> dict[str, np.ndarray]:
 
     data = _read_mds_prefix(run_dir, "atm_state", iters)
     data.update(_read_mds_prefix(run_dir, "atm_surf", iters))
-    data["pressure"] = (
-        (np.arange(cfg.Nr, dtype=np.float32) + 0.5) * (P0 / cfg.Nr)
-    )
+    del_r = pressure_thicknesses(cfg.Nr)
+    upper_edges = P0 - np.concatenate([[0.0], np.cumsum(del_r[:-1])])
+    data["pressure"] = (upper_edges - 0.5 * del_r).astype(np.float32)
     data["time"] = np.asarray(iters, dtype=np.float64) * cfg.delta_t
     return data
 

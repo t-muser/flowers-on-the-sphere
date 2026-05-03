@@ -26,11 +26,11 @@ Two IC files are written per run:
   - ``T.init.data`` / ``.meta`` : initial potential temperature [K]
   - ``bathyFile.bin``            : ocean depth mask (all zero = aqua-planet)
 
-The temperature field is a horizontally uniform reference profile
-(geopotential-temperature at each pressure level) plus small bandlimited
-random perturbations controlled by ``seed``. The perturbations are
-smoothed with a Gaussian kernel to avoid seeding grid-scale noise into the
-spin-up, which could alias into the resolved baroclinic eddies.
+The temperature field is the latitude-dependent Held-Suarez equilibrium
+potential temperature at each pressure level plus small bandlimited random
+perturbations controlled by ``seed``. The perturbations are smoothed with a
+Gaussian kernel to avoid seeding grid-scale noise into the spin-up, which
+could alias into the resolved baroclinic eddies.
 """
 
 from __future__ import annotations
@@ -44,10 +44,20 @@ from datagen.mitgcm._constants import KAPPA, P0
 from datagen.mitgcm._held_suarez import equilibrium_temperature
 
 
+def pressure_thicknesses(Nr: int, p0: float = P0) -> np.ndarray:
+    """MITgCM pressure-layer thicknesses [Pa], surface to top."""
+    if Nr < 2:
+        return np.asarray([p0], dtype=float)
+    top_thickness = min(15000.0, 0.5 * p0)
+    lower = (p0 - top_thickness) / (Nr - 1)
+    return np.concatenate([np.full(Nr - 1, lower), [top_thickness]])
+
+
 def _pressure_centers(Nr: int, p0: float = P0) -> np.ndarray:
-    """Pressure at level centres [Pa] ordered k=1 (top) to k=Nr (bottom)."""
-    delR = p0 / Nr
-    return (np.arange(Nr) + 0.5) * delR
+    """Pressure at level centres [Pa] ordered as MITgCM k=1 surface to top."""
+    delR = pressure_thicknesses(Nr, p0)
+    upper_edges = p0 - np.concatenate([[0.0], np.cumsum(delR[:-1])])
+    return upper_edges - 0.5 * delR
 
 
 def _write_mds_meta(path: Path, shape: tuple[int, ...]) -> None:
@@ -87,20 +97,20 @@ def write_temperature_ic(
     """Write the initial potential temperature field as an MDS binary.
 
     The field is a 3-D array of shape ``(Nr, Nlat, Nlon)`` [K] consisting
-    of a horizontally uniform reference profile (Held-Suarez θ_eq at the
-    equator, φ=0) plus small bandlimited random perturbations.
+    of the Held-Suarez θ_eq(φ,p) field plus small bandlimited random
+    perturbations.
 
-    The reference profile gives a stable atmosphere (θ increases upward)
-    that is in geostrophic balance at rest. The perturbations are smoothed
-    with a Gaussian kernel of width ``smooth_sigma`` grid points to avoid
-    grid-scale seeding that could excite unresolved modes.
+    The reference state matches MITgCM's Held-Suarez verification setup and
+    avoids starting from unrealistically warm polar columns. The perturbations
+    are smoothed with a Gaussian kernel of width ``smooth_sigma`` grid points
+    to avoid grid-scale seeding that could excite unresolved modes.
 
     Args:
         path:          Destination path (e.g., ``run_dir / "T.init.data"``).
                        The companion ``.meta`` file is written alongside.
         Nlon:          Number of longitude points.
         Nlat:          Number of latitude points.
-        Nr:            Number of vertical levels (top to bottom).
+        Nr:            Number of vertical levels (MITgCM k=1 surface to top).
         seed:          RNG seed for the perturbation (controls IC diversity).
         amplitude:     RMS amplitude of perturbation [K] before smoothing.
         smooth_sigma:  Gaussian smoothing width [grid points], applied
@@ -108,13 +118,17 @@ def write_temperature_ic(
         p0:            Reference pressure [Pa].
         kappa:         Poisson exponent R_dry/Cp.
     """
-    # Reference potential temperature profile (equator, no ΔTy contribution).
+    # Reference potential temperature field on MITgCM cell centers.
     p_centers = _pressure_centers(Nr, p0)
-    lat_eq = np.zeros(Nr)
-    theta_ref = equilibrium_temperature(lat_eq, p_centers)  # (Nr,)
+    del_lat = np.pi / Nlat
+    lat = -0.5 * np.pi + (np.arange(Nlat) + 0.5) * del_lat
+    theta_ref = equilibrium_temperature(
+        lat[None, :],
+        p_centers[:, None],
+    )  # (Nr, Nlat)
 
     # Broadcast to (Nr, Nlat, Nlon).
-    theta_ic = np.broadcast_to(theta_ref[:, None, None], (Nr, Nlat, Nlon)).copy()
+    theta_ic = np.broadcast_to(theta_ref[:, :, None], (Nr, Nlat, Nlon)).copy()
 
     # Add seeded, bandlimited perturbations.
     rng = np.random.default_rng(seed)

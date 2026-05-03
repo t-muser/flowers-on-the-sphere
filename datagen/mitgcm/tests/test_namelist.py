@@ -72,6 +72,24 @@ class TestWriteData:
         content = p.read_text()
         assert "ATMOSPHERIC" in content
 
+    def test_contains_ideal_gas_eos(self, tmp_path):
+        p = tmp_path / "data"
+        write_data(p, Nlon=128, Nlat=64, Nr=20, delta_t=600.0,
+                   n_iter0=0, n_timesteps=1000, write_pickup=False,
+                   pchkpt_freq=0.0, has_ic_file=False,
+                   T0=HS_T0, delta_theta_z=10.0)
+        assert "eosType      = 'IDEALG'" in p.read_text()
+
+    def test_held_suarez_stability_settings(self, tmp_path):
+        p = tmp_path / "data"
+        write_data(p, Nlon=128, Nlat=64, Nr=20, delta_t=600.0,
+                   n_iter0=0, n_timesteps=1000, write_pickup=False,
+                   pchkpt_freq=0.0, has_ic_file=False,
+                   T0=HS_T0, delta_theta_z=10.0)
+        content = p.read_text()
+        assert "selectCoriScheme = 2" in content
+        assert "hFacMin        = 1.0" in content
+
     def test_grid_spacing_correct(self, tmp_path):
         """delX should be 360/Nlon degrees, delY should be 180/Nlat degrees."""
         p = tmp_path / "data"
@@ -157,8 +175,25 @@ class TestWriteData:
                   if v.strip().rstrip(",")]
         assert len(values) == Nr, f"Expected {Nr} tRef values, got {len(values)}"
 
-    def test_uniform_vertical_layers(self, tmp_path):
-        """delR should use the N*value syntax for uniform layers."""
+    def test_tref_is_surface_to_top(self, tmp_path):
+        """MITgCM pressure-coordinate tRef is ordered k=1 surface to top."""
+        p = tmp_path / "data"
+        write_data(p, Nlon=128, Nlat=64, Nr=20, delta_t=600.0,
+                   n_iter0=0, n_timesteps=1000, write_pickup=False,
+                   pchkpt_freq=0.0, has_ic_file=False,
+                   T0=HS_T0, delta_theta_z=10.0)
+        content = p.read_text()
+        match = re.search(r"tRef\s*=\s*(.*?)(?=\n\s*[a-zA-Z])", content, re.DOTALL)
+        assert match is not None
+        values = [
+            float(v.strip().rstrip(","))
+            for v in re.split(r"[,\n]+", match.group(1))
+            if v.strip().rstrip(",")
+        ]
+        assert values[0] > values[-1]
+
+    def test_vertical_layers_sum_to_p0(self, tmp_path):
+        """delR should define Nr pressure layers summing to p0."""
         Nr = 20
         p = tmp_path / "data"
         write_data(p, Nlon=128, Nlat=64, Nr=Nr, delta_t=600.0,
@@ -166,8 +201,15 @@ class TestWriteData:
                    pchkpt_freq=0.0, has_ic_file=False,
                    T0=HS_T0, delta_theta_z=10.0)
         content = p.read_text()
-        # delR = 20*5000.0 (or similar)
-        assert f"{Nr}*" in content
+        match = re.search(r"delR\s*=\s*(.*?),\n\s*ygOrigin", content, re.DOTALL)
+        assert match is not None
+        values = [
+            float(v.strip().rstrip(","))
+            for v in re.split(r"[,\n]+", match.group(1))
+            if v.strip().rstrip(",")
+        ]
+        assert len(values) == Nr
+        assert sum(values) == pytest.approx(1.0e5)
 
 
 # ─── write_data_hs_forc ─────────────────────────────────────────────────────

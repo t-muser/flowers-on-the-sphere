@@ -27,6 +27,7 @@ from datagen.mitgcm._constants import (
     R_EARTH,
 )
 from datagen.mitgcm._held_suarez import reference_temperature_profile
+from datagen.mitgcm.ic import pressure_thicknesses
 
 
 def _fmt_real(v: float) -> str:
@@ -35,9 +36,10 @@ def _fmt_real(v: float) -> str:
 
 
 def _pressure_centers(Nr: int, p0: float = P0) -> np.ndarray:
-    """Pressure at cell centres [Pa] for Nr uniform layers from 0 to p0."""
-    delR = p0 / Nr
-    return (np.arange(Nr) + 0.5) * delR
+    """Pressure at cell centres [Pa] ordered as MITgCM k=1 surface to top."""
+    delR = pressure_thicknesses(Nr, p0)
+    upper_edges = p0 - np.concatenate([[0.0], np.cumsum(delR[:-1])])
+    return upper_edges - 0.5 * delR
 
 
 def write_data(
@@ -74,7 +76,8 @@ def write_data(
     """
     del_lon = 360.0 / Nlon  # degrees
     del_lat = 180.0 / Nlat  # degrees
-    del_r   = P0 / Nr       # Pa per layer (uniform)
+    del_r = pressure_thicknesses(Nr)
+    del_r_str = ",\n  ".join(_fmt_real(v) for v in del_r)
 
     p_centers = _pressure_centers(Nr)
     t_ref = reference_temperature_profile(p_centers, T0=T0, delta_theta_z=delta_theta_z)
@@ -92,6 +95,7 @@ def write_data(
   no_slip_sides  = .FALSE.,
   no_slip_bottom = .FALSE.,
   buoyancyRelation = 'ATMOSPHERIC',
+  eosType      = 'IDEALG',
   atm_Rd       = {_fmt_real(R_DRY)},
   atm_Cp       = {_fmt_real(CP)},
   atm_Po       = {_fmt_real(P0)},
@@ -99,14 +103,14 @@ def write_data(
   rhoConst       = 1.0,
   useNHMTerms   = .FALSE.,
   useCoriolis   = .TRUE.,
-  selectCoriScheme = 1,
+  selectCoriScheme = 2,
   f0            = 0.0,
   beta          = 0.0,
   tempAdvScheme  = 33,
   staggerTimeStep = .TRUE.,
   implicitFreeSurface = .TRUE.,
   exactConserv   = .TRUE.,
-  hFacMin        = 0.1,
+  hFacMin        = 1.0,
   viscAh         = 0.0,
   diffKhT        = 0.0,
  /
@@ -134,7 +138,7 @@ def write_data(
   usingSphericalPolarGrid = .TRUE.,
   delX         = {Nlon}*{_fmt_real(del_lon)},
   delY         = {Nlat}*{_fmt_real(del_lat)},
-  delR         = {Nr}*{_fmt_real(del_r)},
+  delR         = {del_r_str},
   ygOrigin     = -90.0,
   xgOrigin     = 0.0,
   rSphere      = {_fmt_real(R_EARTH)},
