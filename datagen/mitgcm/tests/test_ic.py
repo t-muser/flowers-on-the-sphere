@@ -108,13 +108,11 @@ class TestWriteTemperatureIc:
         assert arr.shape == (Nr, Nlat, Nlon)
 
     def test_reference_profile_stable_stratification(self, tmp_path):
-        """Potential temperature should decrease from top (k=0) to bottom (k=Nr-1).
+        """Potential temperature should increase from surface to top.
 
         The IC field is potential temperature θ.  A stably stratified atmosphere
-        has dθ/dp > 0, which means θ *decreases* from the low-pressure top level
-        (k=0, ~2500 Pa) to the high-pressure bottom level (k=Nr-1, ~97500 Pa).
-        This is the opposite of actual temperature, which increases toward the
-        surface.
+        has θ increasing upward. MITgCM pressure-coordinate arrays are ordered
+        k=1 at the high-pressure surface and k=Nr at the low-pressure top.
         """
         Nlon, Nlat, Nr = 16, 8, 10
         # Use tiny amplitude so perturbations don't obscure the trend.
@@ -125,10 +123,10 @@ class TestWriteTemperatureIc:
         arr = raw.reshape(Nr, Nlat, Nlon)
         # Level mean at each k.
         T_mean = arr.mean(axis=(1, 2))
-        # Potential temperature must decrease monotonically from top to bottom.
-        assert np.all(np.diff(T_mean) <= 0.1), (
-            "Potential temperature should decrease monotonically from top (k=0) "
-            "to bottom (k=Nr-1) for stable stratification"
+        # Potential temperature must increase monotonically from surface to top.
+        assert np.all(np.diff(T_mean) >= -0.1), (
+            "Potential temperature should increase monotonically from surface "
+            "(k=0) to top (k=Nr-1) for stable stratification"
         )
 
     def test_values_are_physical_temperatures(self, tmp_path):
@@ -170,8 +168,9 @@ class TestWriteTemperatureIc:
         raw = np.fromfile(str(tmp_path / "T.init.data"), dtype=">f4")
         arr = raw.reshape(Nr, Nlat, Nlon).astype(np.float64)
 
-        # Subtract the horizontal mean (= reference profile) per level.
-        T_mean = arr.mean(axis=(1, 2), keepdims=True)
+        # Subtract zonal mean per level/latitude (= reference field plus any
+        # zonal-mean perturbation component).
+        T_mean = arr.mean(axis=2, keepdims=True)
         noise = arr - T_mean
         assert noise.std() < 3.0 * amplitude
 

@@ -8,7 +8,7 @@ This module implements the three components of the idealized GCM forcing:
 
 These Python functions serve two roles:
 - They are the reference against which the Fortran implementation in
-  ``datagen/mitgcm/code/hs_forc.F`` is validated.
+  ``datagen/mitgcm/code/apply_forcing.F`` is validated.
 - They are directly tested in ``datagen/mitgcm/tests/test_held_suarez.py``.
 
 All arguments use physical SI units (Pa for pressure, radians for latitude,

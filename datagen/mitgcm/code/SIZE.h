@@ -31,3 +31,10 @@ C     Nr  :: Number of vertical levels
      &           Nx  = sNx*nSx*nPx,
      &           Ny  = sNy*nSy*nPy,
      &           Nr  =   20)
+
+C     MAX_OLX :: Maximum overlap region size used to dimension exchange
+C     MAX_OLY    buffers in recent MITgcm checkouts.
+      INTEGER MAX_OLX
+      INTEGER MAX_OLY
+      PARAMETER ( MAX_OLX = OLx,
+     &            MAX_OLY = OLy )
