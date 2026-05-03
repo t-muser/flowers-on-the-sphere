@@ -29,6 +29,7 @@ from datagen.mitgcm.namelist import (
     write_data_hs_forc,
     write_data_pkg,
     write_data_shap,
+    write_eedata,
     write_all_namelists,
 )
 
@@ -53,14 +54,14 @@ class TestWriteData:
         content = p.read_text()
         assert "usingSphericalPolarGrid = .TRUE." in content
 
-    def test_contains_pcoords_flag(self, tmp_path):
+    def test_contains_pressure_coordinate_buoyancy(self, tmp_path):
         p = tmp_path / "data"
         write_data(p, Nlon=128, Nlat=64, Nr=20, delta_t=600.0,
                    n_iter0=0, n_timesteps=1000, write_pickup=False,
                    pchkpt_freq=0.0, has_ic_file=False,
                    T0=HS_T0, delta_theta_z=10.0)
         content = p.read_text()
-        assert "usingPCoords" in content and ".TRUE." in content
+        assert "buoyancyRelation = 'ATMOSPHERIC'" in content
 
     def test_contains_atmospheric_buoyancy(self, tmp_path):
         p = tmp_path / "data"
@@ -113,7 +114,7 @@ class TestWriteData:
                    n_iter0=0, n_timesteps=1000, write_pickup=True,
                    pchkpt_freq=600000.0, has_ic_file=False,
                    T0=HS_T0, delta_theta_z=10.0)
-        assert "writePickup      = .TRUE." in p.read_text()
+        assert "writePickupAtEnd = .TRUE." in p.read_text()
 
     def test_write_pickup_false(self, tmp_path):
         p = tmp_path / "data"
@@ -121,7 +122,7 @@ class TestWriteData:
                    n_iter0=0, n_timesteps=1000, write_pickup=False,
                    pchkpt_freq=0.0, has_ic_file=False,
                    T0=HS_T0, delta_theta_z=10.0)
-        assert "writePickup      = .FALSE." in p.read_text()
+        assert "writePickupAtEnd = .FALSE." in p.read_text()
 
     def test_ic_file_referenced_when_requested(self, tmp_path):
         p = tmp_path / "data"
@@ -228,10 +229,10 @@ class TestWriteDataHsForc:
 # ─── write_data_pkg ─────────────────────────────────────────────────────────
 
 class TestWriteDataPkg:
-    def test_hs_forc_enabled(self, tmp_path):
+    def test_no_nonstandard_hs_forc_package_flag(self, tmp_path):
         p = tmp_path / "data.pkg"
         write_data_pkg(p, use_diagnostics=True)
-        assert "useHS_FORC     = .TRUE." in p.read_text()
+        assert "useHS_FORC" not in p.read_text()
 
     def test_diagnostics_enabled(self, tmp_path):
         p = tmp_path / "data.pkg"
@@ -249,6 +250,17 @@ class TestWriteDataPkg:
         assert "useShap_Filt   = .TRUE." in p.read_text()
 
 
+# ─── write_eedata ───────────────────────────────────────────────────────────
+
+class TestWriteEedata:
+    def test_threads_set_to_one(self, tmp_path):
+        p = tmp_path / "eedata"
+        write_eedata(p)
+        content = p.read_text()
+        assert "nTx = 1" in content
+        assert "nTy = 1" in content
+
+
 # ─── write_data_diagnostics ─────────────────────────────────────────────────
 
 class TestWriteDataDiagnostics:
@@ -263,6 +275,18 @@ class TestWriteDataDiagnostics:
         p = tmp_path / "data.diagnostics"
         write_data_diagnostics(p, snapshot_interval_s=86400.0)
         assert "atm_state" in p.read_text()
+
+    def test_surface_pressure_uses_separate_stream(self, tmp_path):
+        p = tmp_path / "data.diagnostics"
+        write_data_diagnostics(p, snapshot_interval_s=86400.0)
+        content = p.read_text()
+        assert "fields(1:1,2) = 'ETAN    '" in content
+        assert "fileName(2)   = 'atm_surf'" in content
+
+    def test_all_vertical_levels_requested(self, tmp_path):
+        p = tmp_path / "data.diagnostics"
+        write_data_diagnostics(p, snapshot_interval_s=86400.0, Nr=4)
+        assert "levels(1:4,1) = 1, 2, 3, 4" in p.read_text()
 
     @pytest.mark.parametrize("interval_s", [3600.0, 86400.0, 43200.0])
     def test_frequency_matches_interval(self, tmp_path, interval_s):
@@ -280,7 +304,7 @@ class TestWriteDataShap:
     def test_shap_filter_enabled(self, tmp_path):
         p = tmp_path / "data.shap"
         write_data_shap(p)
-        assert "Shap_filt_enabled = .TRUE." in p.read_text()
+        assert "SHAP_PARM01" in p.read_text()
 
     def test_fourth_order_filter(self, tmp_path):
         p = tmp_path / "data.shap"
@@ -314,7 +338,8 @@ class TestWriteAllNamelists:
 
     def test_all_files_created_without_diagnostics(self, tmp_path):
         write_all_namelists(tmp_path, **self._default_kwargs())
-        for name in ("data", "data.pkg", "data.hs_forc", "data.shap"):
+        for name in ("data", "data.pkg", "eedata", "data.hs_forc",
+                     "data.shap"):
             assert (tmp_path / name).exists(), f"{name} missing"
         assert not (tmp_path / "data.diagnostics").exists()
 
