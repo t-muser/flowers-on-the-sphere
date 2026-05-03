@@ -360,7 +360,8 @@ class Spectral2xDown(nn.Module):
     """SHT-based 2x downsampler on S². Exact up to quadrature, pole-aware."""
 
     def __init__(self, dim_in, dim_out, high_res, low_res, groups=32,
-                 grid_type: str = "equiangular", norm_type: str = "group"):
+                 grid_type: str = "equiangular", norm_type: str = "group",
+                 resampling_norm_type: str | None = None):
         super().__init__()
         H_hi, W_hi = high_res
         H_lo, W_lo = low_res
@@ -375,9 +376,10 @@ class Spectral2xDown(nn.Module):
         self.sht_hi = th.RealSHT(H_hi, W_hi, lmax=lmax, mmax=mmax, grid=grid_type).float()
         self.isht_lo = th.InverseRealSHT(H_lo, W_lo, lmax=lmax, mmax=mmax, grid=grid_type).float()
 
+        proj_norm_type = resampling_norm_type if resampling_norm_type is not None else norm_type
         self.proj = nn.Sequential(
             nn.Conv2d(dim_in, dim_out, kernel_size=1),
-            make_norm2d(norm_type, dim_out, groups=groups),
+            make_norm2d(proj_norm_type, dim_out, groups=groups),
             nn.GELU(),
         )
 
@@ -392,7 +394,8 @@ class Spectral2xUp(nn.Module):
     """SHT-based 2x upsampler on S²."""
 
     def __init__(self, dim_in, dim_out, low_res, high_res, groups=32,
-                 grid_type: str = "equiangular", norm_type: str = "group"):
+                 grid_type: str = "equiangular", norm_type: str = "group",
+                 resampling_norm_type: str | None = None):
         super().__init__()
         H_lo, W_lo = low_res
         H_hi, W_hi = high_res
@@ -404,9 +407,10 @@ class Spectral2xUp(nn.Module):
         self.lmax = lmax
         self.mmax = mmax
 
+        pre_norm_type = resampling_norm_type if resampling_norm_type is not None else norm_type
         self.pre = nn.Sequential(
             nn.Conv2d(dim_in, dim_out, kernel_size=1),
-            make_norm2d(norm_type, dim_out, groups=groups),
+            make_norm2d(pre_norm_type, dim_out, groups=groups),
             nn.GELU(),
         )
         self.sht_lo = th.RealSHT(H_lo, W_lo, lmax=lmax, mmax=mmax, grid=grid_type).float()
@@ -497,6 +501,7 @@ class SpectralDownBlock(nn.Module):
                  tangent=False, polar_fold=False,
                  low_res=None, grid_type: str = "equiangular",
                  norm_type: str = "group",
+                 resampling_norm_type: str | None = None,
                  **kwargs):
         super().__init__()
         assert low_res is not None, "SpectralDownBlock requires low_res"
@@ -512,6 +517,7 @@ class SpectralDownBlock(nn.Module):
             high_res=tuple(spatial_resolution), low_res=tuple(low_res),
             groups=groups, grid_type=grid_type,
             norm_type=norm_type,
+            resampling_norm_type=resampling_norm_type,
         )
 
     @property
@@ -537,6 +543,7 @@ class SpectralUpBlock(nn.Module):
                  tangent=False, polar_fold=False,
                  low_res=None, grid_type: str = "equiangular",
                  norm_type: str = "group",
+                 resampling_norm_type: str | None = None,
                  **kwargs):
         super().__init__()
         assert low_res is not None, "SpectralUpBlock requires low_res"
@@ -545,6 +552,7 @@ class SpectralUpBlock(nn.Module):
             low_res=tuple(low_res), high_res=tuple(out_spatial_resolution),
             groups=groups, grid_type=grid_type,
             norm_type=norm_type,
+            resampling_norm_type=resampling_norm_type,
         )
         self.flower = FlowerBlock(
             total_channels, out_spatial_resolution, num_heads,
@@ -591,6 +599,7 @@ class FlowerUNet(nn.Module):
         resolution_schedule: list[tuple[int, int]] | None = None,
         grid_type: str = "equiangular",
         norm_type: str = "group",
+        resampling_norm_type: str | None = None,
     ):
         super().__init__()
         self.norm_type = norm_type
@@ -660,6 +669,7 @@ class FlowerUNet(nn.Module):
                 drop_south_pole=drop_south_pole, sec_max=sec_max,
                 low_res=low_res, grid_type=grid_type,
                 norm_type=norm_type,
+                resampling_norm_type=resampling_norm_type,
             ))
             n_extra = (blocks_per_stage - 1) if i > 0 else 0
             self.encoder_extra_blocks.append(nn.ModuleList([
@@ -716,6 +726,7 @@ class FlowerUNet(nn.Module):
                 tangent=tangent, polar_fold=polar_fold,
                 low_res=low_res, grid_type=grid_type,
                 norm_type=norm_type,
+                resampling_norm_type=resampling_norm_type,
             ))
             n_extra = (blocks_per_stage - 1) if i < n_levels - 2 else 0
             self.decoder_extra_blocks.append(nn.ModuleList([
@@ -913,3 +924,90 @@ class Dahlia(nn.Module):
             x = torch.cat([x, south_pole], dim=2)
 
         return x
+
+
+# =============================================================================
+# Zinnia equiangular variants — skip the LG round-trip
+# =============================================================================
+
+class _ZinniaEquiBase(nn.Module):
+    """Shared scaffold for Zinnia equiangular variants.
+
+    Drops Zinnia's LG round-trip + 4 boundary SHTs. Internal Spectral 2x
+    down/up still SHT-based, but on an equiangular grid throughout. If H
+    isn't divisible by 2^(n_levels-1), the south-pole row is dropped on
+    entry and reconstructed (zonal mean of row H-1) on egress, matching
+    Dahlia.
+    """
+
+    def __init__(self,
+                 inp_shape=(121, 240), out_shape=None,
+                 inp_chans=69, out_chans=69,
+                 lifting_dim=150, n_levels=4,
+                 channel_multipliers=None,
+                 num_heads=50, groups=50, dropout_rate=0.0,
+                 coord_dim=3,
+                 tangent: bool = True,
+                 resampling_norm_type: str | None = None,
+                 **kwargs):
+        super().__init__()
+
+        H, W = inp_shape
+        divisor = 2 ** (n_levels - 1)
+
+        self.orig_H = H
+        self.drop_south_pole = False
+
+        if H % divisor != 0:
+            assert (H - 1) % divisor == 0, (
+                f"H={H}: dropping one row gives H-1={H-1} which is still not "
+                f"divisible by {divisor}."
+            )
+            self.drop_south_pole = True
+            H = H - 1
+
+        assert W % divisor == 0, f"Width {W} must be divisible by {divisor}"
+
+        self.model = FlowerUNet(
+            dim_in=inp_chans,
+            dim_out=out_chans,
+            spatial_resolution=(H, W),
+            lifting_dim=lifting_dim,
+            n_levels=n_levels,
+            channel_multipliers=channel_multipliers,
+            num_heads=num_heads,
+            groups=groups,
+            dropout_rate=dropout_rate,
+            coord_dim=coord_dim,
+            tangent=tangent,
+            polar_fold=False,
+            up_block_cls=SpectralUpBlock,
+            down_block_cls=SpectralDownBlock,
+            drop_south_pole=self.drop_south_pole,
+            grid_type="equiangular",
+            resampling_norm_type=resampling_norm_type,
+        )
+
+    def forward(self, x, meta=None):
+        if self.drop_south_pole:
+            x = x[:, :, :-1, :]
+
+        x = self.model(x, meta)
+
+        if self.drop_south_pole:
+            south_pole = x[:, :, -1:, :].mean(dim=3, keepdim=True)
+            south_pole = south_pole.expand(-1, -1, -1, x.shape[3])
+            x = torch.cat([x, south_pole], dim=2)
+
+        return x
+
+
+class ZinniaV5(_ZinniaEquiBase):
+    """Equiangular Zinnia: tangent warp, no GroupNorm in Spectral2xDown.proj /
+    Spectral2xUp.pre (the conv-norm-gelu sequence on either side of the SHT pair).
+    """
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("tangent", True)
+        kwargs.setdefault("resampling_norm_type", "none")
+        super().__init__(**kwargs)

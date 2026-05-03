@@ -1,0 +1,11 @@
+# ZinniaV5 — V2 + drop GroupNorm inside Spectral2xDown.proj and Spectral2xUp.pre
+# (equiangular grid, tangent warp, no resampling norm).
+model:
+  _target_: fots.models.flowers.zinnia.ZinniaV5
+  lifting_dim: 150
+  n_levels: 4
+  channel_multipliers: [1, 2, 4, 8]
+  num_heads: 50
+  groups: 50
+  dropout_rate: 0.0
+  coord_dim: 3
