@@ -27,6 +27,16 @@ runs/
 .claude
 .python_version
 notebooks/*.mp4
-slurm/
+/slurm/
+
+# MITgcm build outputs (per-component build dirs keep only `genmake_local`).
+datagen/**/build_atm/*
+datagen/**/build_ocn/*
+datagen/**/build_cpl/*
+!datagen/**/build_atm/genmake_local
+!datagen/**/build_ocn/genmake_local
+!datagen/**/build_cpl/genmake_local
+datagen/**/build_info.json
+datagen/**/inputs/
 
 **/.ipynb_checkpoints/

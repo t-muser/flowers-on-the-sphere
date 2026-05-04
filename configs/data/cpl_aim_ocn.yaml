@@ -1,0 +1,58 @@
+# Coupled AIM atmosphere + ocean ensemble (180 runs, cs32 cubed-sphere on disk).
+# Sweep axes: CO2 ppm × solar scale × GM-Redi κ × seed (4 × 3 × 3 × 5 = 180).
+# Per run: 30-day spin-up + 365 daily snapshots of the data phase.
+#
+# On disk: native cs32 zarr (face=6, j=32, i=32) with separate atm_*/ocn_* vars;
+# 3-D atm streams have a Zsigma=5 axis. The CplAimOcnDataModule regrids each
+# sample on the fly to a (64, 128) equiangular lat/lon grid and stacks the 13
+# atm + 6 ocn streams into 35 channels (3-D atm vars contribute 5 σ-levels each).
+data:
+  _target_: fots.data.cpl_aim_ocn.CplAimOcnDataModule
+  root: ${oc.env:DATA_ROOT}/cpl_aim_ocn
+  dataset_name: cpl_aim_ocn
+  time_steps_per_run: 365
+  dim_in: 35
+  dim_out: 35
+  spatial_resolution: [64, 128]
+  grid: equiangular
+  field_names:
+    - atm_TS
+    - atm_QS
+    - atm_PRECON
+    - atm_PRECLS
+    - atm_WINDS
+    - atm_UFLUX
+    - atm_VFLUX
+    - atm_SI_Fract
+    - atm_SI_Thick
+    - atm_UVEL_s1
+    - atm_UVEL_s2
+    - atm_UVEL_s3
+    - atm_UVEL_s4
+    - atm_UVEL_s5
+    - atm_VVEL_s1
+    - atm_VVEL_s2
+    - atm_VVEL_s3
+    - atm_VVEL_s4
+    - atm_VVEL_s5
+    - atm_THETA_s1
+    - atm_THETA_s2
+    - atm_THETA_s3
+    - atm_THETA_s4
+    - atm_THETA_s5
+    - atm_SALT_s1
+    - atm_SALT_s2
+    - atm_SALT_s3
+    - atm_SALT_s4
+    - atm_SALT_s5
+    - ocn_THETA
+    - ocn_SALT
+    - ocn_UVEL
+    - ocn_VVEL
+    - ocn_ETAN
+    - ocn_MXLDEPTH
+  batch_size: 4
+  n_steps_input: 4
+  n_steps_output: 1
+  num_workers: 8
+  regrid_method: nearest
