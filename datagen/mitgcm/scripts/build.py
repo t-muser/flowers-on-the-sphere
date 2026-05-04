@@ -55,7 +55,7 @@ def compile_mitgcm(mitgcm_root: Path, optfile: Path | None) -> None:
         sys.exit(f"genmake2 not found at {genmake2}")
 
     genmake_cmd = [
-        str(genmake2),
+        str(genmake2.resolve()),
         f"-mods={_CODE.resolve()}",
         f"-rootdir={mitgcm_root.resolve()}",
         "-mpi",
