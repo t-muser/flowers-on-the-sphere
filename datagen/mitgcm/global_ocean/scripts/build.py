@@ -1,8 +1,9 @@
-"""Build the MITgcm global ocean tutorial executable.
+"""Build the MITgcm global ocean cubed-sphere executable.
 
-This compiles the vendored MITgcm
-``verification/tutorial_global_oce_latlon`` code customizations into an
-executable at ``datagen/mitgcm/global_ocean/build/mitgcmuv``.
+This compiles the vendored MITgcm ``verification/global_ocean.cs32x15``
+sources together with our customizations under
+``datagen/mitgcm/global_ocean/code/`` into an executable at
+``datagen/mitgcm/global_ocean/build/mitgcmuv``.
 
 Run from the repository root::
 
@@ -28,7 +29,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 _PKG = _HERE.parent
 _REPO_ROOT = _PKG.parents[2]
-_TUTORIAL_CODE = _REPO_ROOT / "mitgcm" / "verification" / "tutorial_global_oce_latlon" / "code"
+_PKG_CODE = _PKG / "code"
 _BUILD = _PKG / "build"
 
 
@@ -87,7 +88,7 @@ def write_build_info(*, mitgcm_root: Path, mods_dir: Path, use_mpi: bool) -> Non
 
     info = {
         "built_at": datetime.now(timezone.utc).isoformat(),
-        "experiment": "tutorial_global_oce_latlon",
+        "experiment": "global_ocean.cs32x15",
         "mitgcm_root": str(mitgcm_root),
         "mitgcm_git_hash": git_hash,
         "mods_dir": str(mods_dir),
@@ -110,7 +111,7 @@ def main() -> None:
     ap.add_argument(
         "--mods-dir",
         type=Path,
-        default=_TUTORIAL_CODE,
+        default=_PKG_CODE,
         help="Code customizations directory for the global ocean tutorial.",
     )
     ap.add_argument(

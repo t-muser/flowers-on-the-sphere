@@ -1,25 +1,26 @@
-# MITgcm Global Ocean Tutorial
+# MITgcm Global Ocean (cs32x15)
 
 **One-line description.** A MITgcm implementation of the
-`tutorial_global_oce_latlon` ocean benchmark, integrated on a
-4-degree spherical-polar grid and exported to regular lat-lon Zarr
-stores.
+`verification/global_ocean.cs32x15` ocean benchmark, integrated on a
+cubed-sphere grid (six 32×32 faces, 15 vertical levels) and exported
+to a native cubed-sphere Zarr layout.
 
-**Extended description.** Each trajectory runs the standard MITgcm
-global ocean tutorial with realistic bathymetry, Levitus hydrography
-and restoring, Trenberth wind stress, and NCEP heat and freshwater
-fluxes. The solver stages the tutorial code from the vendored MITgcm
-tree, patches only the runtime settings needed for data generation
-(`nTimeSteps`, output cadence, checkpoint cadence, timestep values,
-and a small GM/Redi sweep hook), and then extracts a small set of
-diagnostic fields into a regular `(lat, lon)` grid. The production
-workflow is split into a corner-based preflight and a longer regular
-run. Preflight is designed to test the corners of the parameter box
-under reduced duration before committing to the full 32-corner array.
+**Extended description.** Each trajectory runs the cs32x15 verification
+case with realistic bathymetry, Levitus hydrography (3-D initial
+condition and surface restoring), Trenberth wind stress, and
+shi*/ncep heat and freshwater fluxes. Runs warm-start from the
+`pickup.0000072000` file shipped with the tutorial, which contains
+roughly 200 model years of free spin-up. The Python driver stages the
+tutorial code from the vendored MITgcm tree, patches only the runtime
+settings needed for data generation (`nIter0`, `nTimeSteps`, output
+cadence, checkpoint cadence, timestep values, restoring timescales, and
+a small GM/Redi sweep hook), and reads the resulting MDS state dumps
+into a face-major Zarr store. The production workflow is split into a
+corner-based preflight and a longer regular run.
 
 ## Associated resources
 
-- **Tutorial.** MITgcm `verification/tutorial_global_oce_latlon`.
+- **Tutorial.** MITgcm `verification/global_ocean.cs32x15`.
 - **Data generator.** Till Muser (University of Basel), 2026.
 - **Generation software.** [MITgcm](../mitgcm) with the global-ocean
   customizations in
@@ -29,14 +30,19 @@ under reduced duration before committing to the full 32-corner array.
 
 ## Physical framework
 
-The benchmark is the MITgcm global ocean tutorial, a primitive-equation
-ocean simulation on a spherical-polar grid. The tutorial setup includes:
+The benchmark is a primitive-equation ocean simulation on the cubed
+sphere with non-linear free surface (`z*` coordinate, real fresh-water
+flux) and vector-invariant momentum. The configuration includes:
 
-- realistic bathymetry
-- Levitus hydrographic initial conditions and restoring
-- Trenberth wind stress forcing
-- NCEP heat and freshwater fluxes
-- GM/Redi mixing
+- realistic cs32 bathymetry (`bathy_Hmin50.bin`)
+- Levitus hydrographic initial conditions (`lev_T_cs_15k.bin`,
+  `lev_S_cs_15k.bin`) and monthly surface restoring (`lev_surfT_cs_12m.bin`,
+  `lev_surfS_cs_12m.bin`)
+- Trenberth wind stress (`trenberth_taux.bin`, `trenberth_tauy.bin`)
+- shi*/ncep heat and freshwater fluxes (`shiQnet_cs32.bin`,
+  `shiEmPR_cs32.bin`)
+- GM/Redi mesoscale eddy parameterization
+- GGL90 vertical mixing
 
 The solver is configured through the tutorial namelist files in the
 vendored MITgcm tree, with a small set of runtime overrides applied by
@@ -46,12 +52,13 @@ the Python driver.
 
 ### Grid
 
-- **Discretization.** Regular `(lat, lon)` output grid with `Nlat = 40`
-  and `Nlon = 90`, equispaced and pole-excluding. The output latitudes
-  are cell centers spanning `80S` to `80N`.
-- **Native solver grid.** MITgcm spherical-polar grid with 90 longitude
-  cells, 40 latitude cells, and 15 vertical z-levels. The native
-  tutorial domain is restricted to `80S..80N`.
+- **Discretization.** Cubed-sphere grid with six 32×32 faces, supplied
+  via `grid_cs32.face00{1..6}.bin` (symlinked from the
+  `tutorial_held_suarez_cs` input directory at run time).
+- **Compile-time domain decomposition.** `sNx=32, sNy=32, nSx=6, nSy=1,
+  nPx=1, nPy=1` — single rank with one tile per cube face. Global
+  output shape is `(Nr, 32, 192)` and reshapes trivially to
+  `(Nr, 6, 32, 32)`.
 - **Vertical coordinate.** 15 depth levels with layer thicknesses from
   `50 m` to `690 m`.
 
@@ -61,19 +68,20 @@ ones used by the driver defaults.
 
 ### Temporal layout
 
+- **Pickup.** Runs warm-start from `pickup.0000072000` (`nIter0=72000`),
+  which provides roughly 200 model years of free spin-up.
 - **Production run.** `36000` time steps on a 1-day model clock, i.e.
-  `100` model years.
+  `100` model years of post-pickup integration.
 - **Snapshot cadence.** `30` simulated days by default for production
   runs.
-- **Preflight.** `30` time steps, with `30` days of output by default
-  unless the SLURM wrapper overrides the cadence.
+- **Preflight.** `30` time steps, with `10`-day snapshots by default.
 - **Time coordinate.** Stored as seconds since the start of the kept
   window; the driver re-bases the MDS iterations so the first saved
   snapshot starts at `t = 0`.
 
 ### Available fields
 
-The exported Zarr stores the following 2-D slices:
+The exported Zarr stores the following 2-D (per-face) slices:
 
 | Field name | Units | Description |
 | --- | --- | --- |
@@ -83,27 +91,15 @@ The exported Zarr stores the following 2-D slices:
 | `v_k2` | `m/s` | Meridional velocity at velocity level 2 |
 | `eta` | `m` | Sea surface height |
 
-All fields are stored as `float32` on the regular lat-lon grid.
-
-### Dataset size
-
-- **Number of trajectories.** 243 for the current sweep grid
-- **Shape per trajectory.** `(time≈1200, field=5, lat=40, lon=90)` for
-  the default 100-year, monthly-output production run
-- **Per-trajectory size.** on the order of tens of MB uncompressed
-- **Total ensemble size.** on the order of a few GB for the default
-  sweep
-
-The exact file size depends on the chosen snapshot cadence. Monthly
-output keeps the 100-year integration manageable; daily output is
-useful for preflight and short test runs.
+All fields are stored as `float32`. Per-cell longitudes (`xc`) and
+latitudes (`yc`) are stored as `(face, y, x)` coordinate arrays
+alongside the data.
 
 ### Storage format
 
-Per-run Zarr stores are written at
-`…/mitgcm/global-ocean/run.zarr`. The standard layout is
-`(time, field, lat, lon)` with chunking optimized for time-slice
-inspection. See
+Per-run Zarr stores are written at `…/mitgcm/global-ocean/run.zarr`.
+The native layout is `(time, field, face, y, x)` with `face=6` and
+`y=x=32`. See
 [`datagen/mitgcm/global_ocean/solver.py`](../datagen/mitgcm/global_ocean/solver.py)
 for the writer and
 [`notebooks/mitgcm_global_ocean_visualize.ipynb`](../notebooks/mitgcm_global_ocean_visualize.ipynb)
@@ -111,11 +107,12 @@ for the visualization workflow.
 
 ## Initial and boundary conditions
 
-The ocean tutorial uses the MITgcm-provided input files from
-`verification/tutorial_global_oce_latlon/input`. These include the
-initial hydrography, bathymetry, forcing fields, and the fixed
-namelists needed for the verification experiment. The Python driver
-only adjusts the runtime settings and the GM/Redi diffusion parameter.
+The cs32x15 verification case ships its own input files in
+`mitgcm/verification/global_ocean.cs32x15/input/`. The Python driver
+symlinks every binary file from that directory plus the six
+`grid_cs32.face00?.bin` files into the run directory, then writes
+patched `data`, `data.gmredi`, `data.pkg`, and the static `eedata`
+namelist on top.
 
 The default output levels are:
 
@@ -124,21 +121,6 @@ The default output levels are:
 
 Those defaults are chosen to match the tutorial diagnostics and to give
 near-surface fields with clear large-scale structure.
-
-## Physical setup
-
-- **Domain.** Global ocean on a spherical-polar grid, restricted to
-  `80S..80N`.
-- **Boundary conditions.** Physical lower boundary from the bathymetry;
-  the driver symlinks the tutorial binary inputs into each run
-  directory.
-- **Dynamics.** MITgcm primitive-equation ocean model with GM/Redi
-  mixing and the tutorial restoring / surface forcing fields.
-- **Timestepper.** MITgcm native time integration, with `deltaTmom`,
-  `deltaTtracer`, `deltaTClock`, and `deltaTfreesurf` patched by the
-  Python driver.
-- **Restart strategy.** Preflight and production both use the same run
-  driver; the preflight phase simply shortens the integration window.
 
 ## Parameter space
 
@@ -155,6 +137,7 @@ around the tutorial defaults:
 
 Held fixed:
 
+- `n_iter0 = 72000` (warm-start from the shipped pickup)
 - `n_timesteps = 36000` for the regular run
 - `delta_t_clock = 86400 s`
 - `tracer_level = 1`
@@ -167,17 +150,13 @@ than only tiny perturbations around the tutorial settings.
 ## Preflight strategy
 
 The preflight configuration uses the same parameter grid but runs each
-corner at reduced duration. The current defaults are:
+corner at reduced duration:
 
-- `30` timesteps
-- `30` days of data collection
-- daily snapshots if you override the cadence to `1` day
+- `30` timesteps after the pickup
+- `10`-day snapshots
 
-For visual inspection and failure detection, the recommended setup is:
-
-- 30-day spin-up corner run
-- 1-day snapshot cadence
-- one SLURM array element per corner
+For visual inspection and failure detection, run the 32-corner array,
+then open the visualization notebook against any successful corner.
 
 ## Numerical-stability strategy
 
@@ -189,8 +168,7 @@ For visual inspection and failure detection, the recommended setup is:
 3. **Failure markers.** SLURM wrappers write `.FAILED` files when a
    run crashes, so one failure does not cancel the rest of the array.
 4. **Shared-storage outputs.** All outputs are written under a user
-   controlled `DATA_ROOT`, which avoids coupling the docs to any
-   personal path.
+   controlled `DATA_ROOT`.
 
 ## Computational details
 
@@ -202,9 +180,7 @@ For visual inspection and failure detection, the recommended setup is:
 - **Solver precision.** MITgcm runs in double precision internally;
   exported Zarr stores are `float32`.
 - **Cluster setup.** The provided scripts assume the `foss/2024a` and
-  `HDF5/1.14.5-gompi-2024a` module stack on sciCORE, but the commands
-  below are written so they can be launched from any folder if you set
-  `--chdir` and `DATA_ROOT` appropriately.
+  `HDF5/1.14.5-gompi-2024a` module stack on sciCORE.
 
 ## End-to-end data flow
 
@@ -212,10 +188,8 @@ For visual inspection and failure detection, the recommended setup is:
 # Login node: install Python deps
 uv sync --project datagen
 
-# Build the MITgcm executable for the global-ocean tutorial
-uv run --project datagen python -m datagen.mitgcm.global_ocean.scripts.build \
-  --mitgcm-root mitgcm \
-  --optfile mitgcm/tools/build_options/linux_amd64_gfortran
+# Build the MITgcm executable for the cs32x15 case
+sbatch datagen/mitgcm/global_ocean/slurm/build.sbatch
 
 # Emit the full sweep configs
 uv run --project datagen python -m datagen.mitgcm.global_ocean.scripts.generate_sweep \
@@ -224,12 +198,6 @@ uv run --project datagen python -m datagen.mitgcm.global_ocean.scripts.generate_
 # Emit the preflight corner configs
 uv run --project datagen python -m datagen.mitgcm.global_ocean.scripts.preflight generate \
   --out datagen/mitgcm/global_ocean/configs/preflight
-
-# Run one corner interactively
-uv run --project datagen python -m datagen.mitgcm.global_ocean.scripts.preflight run \
-  --config datagen/mitgcm/global_ocean/configs/preflight/corner_00.json \
-  --out-dir /scratch/$USER/fots-data/mitgcm/global-ocean/preflight/corner_00 \
-  --executable datagen/mitgcm/global_ocean/build/mitgcmuv
 
 # Submit the 32-corner preflight array from any directory
 sbatch --chdir /path/to/flowers-on-the-sphere \
@@ -245,8 +213,8 @@ sbatch --chdir /path/to/flowers-on-the-sphere \
 The important portability rule is the same one used for the
 Held-Suarez documentation: keep the repository root as the job working
 directory with `--chdir`, and point `DATA_ROOT` at a writable shared
-location. That makes the SLURM scripts usable from any launch folder.
+location.
 
 For interactive inspection, the notebook
 [`notebooks/mitgcm_global_ocean_visualize.ipynb`](../notebooks/mitgcm_global_ocean_visualize.ipynb)
-is the companion view on the exported global-ocean Zarr stores.
+is the companion view on the exported cubed-sphere Zarr stores.

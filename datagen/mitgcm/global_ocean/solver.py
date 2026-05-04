@@ -1,22 +1,24 @@
-"""MITgcm global ocean tutorial runner.
+"""MITgcm global-ocean cubed-sphere runner.
 
 This module stages and runs the MITgcm
-``verification/tutorial_global_oce_latlon`` experiment from the vendored
-MITgcm tree, then converts selected MDS output fields into the repository's
-standard ``(time, field, lat, lon)`` Zarr layout.
+``verification/global_ocean.cs32x15`` experiment from the vendored MITgcm
+tree, then converts MDS state dumps into a native cubed-sphere Zarr layout
+``(time, field, face, y, x)`` with ``face=6, y=x=32``.
 
 The physical setup follows the MITgcm tutorial:
 
-* 4 degree spherical-polar grid, 90 longitude by 40 latitude cells.
-* Latitudinal extent 80S to 80N.
-* 15 vertical z-levels with layer thicknesses from 50 m to 690 m.
-* Realistic bathymetry, Levitus hydrography/restoring, Trenberth wind stress,
-  NCEP heat and freshwater fluxes, and GM/Redi mixing.
+* Cubed-sphere grid, six 32 by 32 faces, 15 vertical z-levels with layer
+  thicknesses from 50 m to 690 m.
+* Realistic bathymetry (``bathy_Hmin50.bin``), Levitus hydrography (``lev_*``)
+  for both initial state and surface restoring, Trenberth wind stress, and
+  shi*/ncep heat and freshwater fluxes.
+* Warm-start from ``pickup.0000072000`` shipped with the tutorial.
+* GM/Redi mixing with a configurable background diffusivity.
 
 Only runtime details that matter for dataset production are patched in Python
-(``nTimeSteps``, output cadence, checkpoint cadence, timestep values, and a
-small GM/Redi sweep hook). The tutorial namelists and binary inputs remain the
-source of truth.
+(``nIter0``, ``nTimeSteps``, output cadence, checkpoint cadence, timestep
+values, restoring timescales, viscosities, GM/Redi knob). The tutorial
+namelists and binary inputs remain the source of truth.
 """
 
 from __future__ import annotations
@@ -30,16 +32,19 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
+import xarray as xr
 
 from datagen.mitgcm.mds import mds_dtype, parse_mds_meta
-from datagen.resample import write_latlon_zarr
 
 logger = logging.getLogger(__name__)
 
 _PKG = Path(__file__).resolve().parent
 _REPO_ROOT = _PKG.parents[2]
-_TUTORIAL = _REPO_ROOT / "mitgcm" / "verification" / "tutorial_global_oce_latlon"
+_TUTORIAL = _REPO_ROOT / "mitgcm" / "verification" / "global_ocean.cs32x15"
 _TUTORIAL_INPUT = _TUTORIAL / "input"
+# grid_cs32.face00?.bin lives in the held-suarez tutorial; cs32x15's
+# prepare_run script symlinks them. We replicate that at stage time.
+_CS_GRID_DIR = _REPO_ROOT / "mitgcm" / "verification" / "tutorial_held_suarez_cs" / "input"
 _DEFAULT_EXECUTABLE = _PKG / "build" / "mitgcmuv"
 
 GLOBAL_OCEAN_DEL_R: tuple[float, ...] = (
@@ -48,25 +53,32 @@ GLOBAL_OCEAN_DEL_R: tuple[float, ...] = (
     490.0, 540.0, 590.0, 640.0, 690.0,
 )
 
+# Number of grid_cs32 face files to symlink into the run directory.
+_N_FACES = 6
+# Tile dimensions baked into datagen/mitgcm/global_ocean/code/SIZE.h:
+# six 32x32 tiles laid out in X with single-rank execution.
+_FACE_SIZE = 32
+
 
 @dataclass(frozen=True)
 class GlobalOceanRunConfig:
     """Numerical and infrastructure settings for the global ocean run."""
 
     # Tutorial compile-time grid. These must match code/SIZE.h.
-    Nlon: int = 90
-    Nlat: int = 40
+    n_face: int = _N_FACES
+    face_size: int = _FACE_SIZE
     Nr: int = 15
 
     # Production default follows the tutorial recommendation: 100 model years
-    # on the 360-day MITgcm calendar.
+    # on the 360-day MITgcm calendar, restarted from the shipped pickup.
+    n_iter0: int = 72000
     n_timesteps: int = 36000
     delta_t_mom: float = 1800.0
     delta_t_tracer: float = 86400.0
     delta_t_clock: float = 86400.0
     delta_t_freesurf: float = 86400.0
 
-    # Monthly output keeps 100-year runs manageable while retaining seasonal-scale
+    # Monthly output keeps 100-year runs manageable while retaining seasonal
     # variability.
     snapshot_interval_days: float = 30.0
     monitor_freq_s: float = 1.0
@@ -87,9 +99,10 @@ class GlobalOceanRunConfig:
     # Infrastructure.
     executable: Path = field(default_factory=lambda: _DEFAULT_EXECUTABLE)
     input_dir: Path = field(default_factory=lambda: _TUTORIAL_INPUT)
+    grid_dir: Path = field(default_factory=lambda: _CS_GRID_DIR)
     mpirun_cmd: tuple[str, ...] = ("mpirun", "-n", "1")
     timeout_s: float = 3600.0
-    run_name: str = "global_ocean_latlon"
+    run_name: str = "global_ocean_cs32x15"
 
     @property
     def snapshot_interval_s(self) -> float:
@@ -112,16 +125,26 @@ class GlobalOceanRunConfig:
         return self.tau_salt_relax_days * 86400.0
 
 
-def global_ocean_lat_grid(Nlat: int = 40, *, yg_origin: float = -80.0) -> np.ndarray:
-    """Return MITgcm cell-center latitudes in radians."""
-    dy = 160.0 / Nlat
-    return np.deg2rad(yg_origin + (np.arange(Nlat) + 0.5) * dy)
+def load_grid_cs32(grid_dir: Path) -> dict[str, np.ndarray]:
+    """Load cell-center longitudes and latitudes from grid_cs32.face00?.bin.
 
-
-def global_ocean_lon_grid(Nlon: int = 90, *, xg_origin: float = 0.0) -> np.ndarray:
-    """Return MITgcm cell-center longitudes in radians."""
-    dx = 360.0 / Nlon
-    return np.deg2rad(xg_origin + (np.arange(Nlon) + 0.5) * dx)
+    Each face file contains 18 records of (face_size+1)x(face_size+1) double-
+    precision big-endian values; record 1 is xC (cell-center longitude in
+    degrees) and record 2 is yC (cell-center latitude in degrees). We return
+    only the interior face_size x face_size cells.
+    """
+    rec_n = _FACE_SIZE + 1
+    rec_bytes = rec_n * rec_n * 8
+    xc = np.empty((_N_FACES, _FACE_SIZE, _FACE_SIZE), dtype=np.float64)
+    yc = np.empty_like(xc)
+    for i in range(_N_FACES):
+        path = Path(grid_dir) / f"grid_cs32.face{i + 1:03d}.bin"
+        with open(path, "rb") as f:
+            xc_raw = np.frombuffer(f.read(rec_bytes), dtype=">f8").reshape(rec_n, rec_n)
+            yc_raw = np.frombuffer(f.read(rec_bytes), dtype=">f8").reshape(rec_n, rec_n)
+        xc[i] = xc_raw[:_FACE_SIZE, :_FACE_SIZE]
+        yc[i] = yc_raw[:_FACE_SIZE, :_FACE_SIZE]
+    return {"xc": xc, "yc": yc}
 
 
 def _fmt(value: bool | int | float | str) -> str:
@@ -209,6 +232,10 @@ def render_data(cfg: GlobalOceanRunConfig) -> str:
         ("PARM01", "viscAh"): cfg.visc_ah,
         ("PARM01", "diffKrT"): cfg.diff_kr,
         ("PARM01", "diffKrS"): cfg.diff_kr,
+        # useSingleCpuIO emits one global MDS file per field per iteration,
+        # which our reader concatenates trivially.
+        ("PARM01", "useSingleCpuIO"): True,
+        ("PARM03", "nIter0"): cfg.n_iter0,
         ("PARM03", "nTimeSteps"): cfg.n_timesteps,
         ("PARM03", "deltaTmom"): cfg.delta_t_mom,
         ("PARM03", "deltaTtracer"): cfg.delta_t_tracer,
@@ -219,7 +246,6 @@ def render_data(cfg: GlobalOceanRunConfig) -> str:
         ("PARM03", "monitorFreq"): cfg.monitor_freq_s,
         ("PARM03", "tauThetaClimRelax"): cfg.tau_theta_relax_s,
         ("PARM03", "tauSaltClimRelax"): cfg.tau_salt_relax_s,
-        ("PARM05", "the_run_name"): cfg.run_name,
     }
     for (block, key), value in replacements.items():
         text = _set_namelist_value(text, block, key, value)
@@ -234,22 +260,62 @@ def render_data_gmredi(cfg: GlobalOceanRunConfig) -> str:
     )
 
 
+def render_data_pkg(cfg: GlobalOceanRunConfig) -> str:
+    """Render ``data.pkg`` with diagnostics and MNC turned off.
+
+    The cs32x15 tutorial enables ``useDiagnostics`` and ``useMNC``; we don't
+    ship those packages, and reading raw MDS state dumps gives us everything
+    we need.
+    """
+    text = _read_input_template(cfg.input_dir, "data.pkg")
+    text = _set_namelist_value(text, "PACKAGES", "useDiagnostics", False)
+    text = _set_namelist_value(text, "PACKAGES", "useMNC", False)
+    return text
+
+
 def render_static_namelist(cfg: GlobalOceanRunConfig, name: str) -> str:
     """Return an unchanged tutorial namelist from the configured input dir."""
     return _read_input_template(cfg.input_dir, name)
 
 
-def _symlink_inputs(run_dir: Path, input_dir: Path) -> None:
-    """Symlink tutorial binary inputs into ``run_dir``."""
+# Files we materialize ourselves in the run directory; these must not be
+# overwritten by the symlink pass. Excluded files in the tutorial input/ tree
+# (data.diagnostics, data.mnc, prepare_run, MATLAB helpers) are also skipped
+# because they are useless or actively misleading once we patch out the pkgs.
+_GENERATED_NAMES = frozenset({"data", "data.gmredi", "data.pkg"})
+_SKIP_INPUT_NAMES = frozenset({
+    "data.diagnostics",
+    "data.mnc",
+    "prepare_run",
+    "mk_bathy4gcm.m",
+    "rdwr_grid.m",
+})
+
+
+def _symlink_inputs(run_dir: Path, input_dir: Path, grid_dir: Path) -> None:
+    """Symlink tutorial binary inputs and grid files into ``run_dir``."""
     if not input_dir.is_dir():
         raise FileNotFoundError(
             f"Global-ocean input directory not found: {input_dir}"
         )
-    generated = {"data", "data.gmredi", "data.pkg", "data.ptracers", "eedata"}
     for src in sorted(input_dir.iterdir()):
-        if not src.is_file() or src.name in generated:
+        if not src.is_file():
+            continue
+        if src.name in _GENERATED_NAMES or src.name in _SKIP_INPUT_NAMES:
             continue
         dst = run_dir / src.name
+        if dst.is_symlink() or dst.exists():
+            dst.unlink()
+        dst.symlink_to(src.resolve())
+
+    if not grid_dir.is_dir():
+        raise FileNotFoundError(f"Grid directory not found: {grid_dir}")
+    for i in range(_N_FACES):
+        name = f"grid_cs32.face{i + 1:03d}.bin"
+        src = grid_dir / name
+        if not src.is_file():
+            raise FileNotFoundError(f"Missing cs32 grid file: {src}")
+        dst = run_dir / name
         if dst.is_symlink() or dst.exists():
             dst.unlink()
         dst.symlink_to(src.resolve())
@@ -281,11 +347,12 @@ def stage_global_ocean_run(
         exe_link.unlink()
     exe_link.symlink_to(executable.resolve())
 
-    _symlink_inputs(run_dir, Path(cfg.input_dir))
+    _symlink_inputs(run_dir, Path(cfg.input_dir), Path(cfg.grid_dir))
 
     _write_text(run_dir / "data", render_data(cfg))
     _write_text(run_dir / "data.gmredi", render_data_gmredi(cfg))
-    for name in ("data.pkg", "data.ptracers", "eedata"):
+    _write_text(run_dir / "data.pkg", render_data_pkg(cfg))
+    for name in ("eedata",):
         _write_text(run_dir / name, render_static_namelist(cfg, name))
 
     return run_dir
@@ -431,11 +498,38 @@ def _read_mds_single_field(
     return out
 
 
+def _to_face_layout(
+        arr: np.ndarray,
+        *,
+        n_face: int = _N_FACES,
+        face_size: int = _FACE_SIZE,
+) -> np.ndarray:
+    """Reshape MITgcm global-tile output into face-major form.
+
+    With ``nSx = n_face`` tiles laid out in X (each ``face_size`` wide), a
+    global field of shape ``(..., face_size, n_face*face_size)`` is reshaped
+    to ``(..., n_face, face_size, face_size)`` by splitting the X axis and
+    moving the face index in front of the per-tile spatial axes.
+    """
+    if arr.shape[-2] != face_size or arr.shape[-1] != n_face * face_size:
+        raise ValueError(
+            f"_to_face_layout expected (..., {face_size}, {n_face * face_size}); "
+            f"got shape {arr.shape}"
+        )
+    head = arr.shape[:-2]
+    arr = arr.reshape(*head, face_size, n_face, face_size)
+    return np.moveaxis(arr, -2, -3).copy()
+
+
 def read_global_ocean_output(
         run_dir: Path,
         cfg: GlobalOceanRunConfig,
 ) -> dict[str, np.ndarray]:
-    """Read tutorial state-dump prefixes into memory."""
+    """Read tutorial state-dump prefixes into face-major arrays in memory.
+
+    3-D fields come back as ``(time, Nr, n_face, face_size, face_size)`` and
+    the 2-D ``Eta`` as ``(time, n_face, face_size, face_size)``.
+    """
     run_dir = Path(run_dir)
     iters = _find_mds_iters(run_dir, "T")
     if not iters:
@@ -445,11 +539,21 @@ def read_global_ocean_output(
         )
     return {
         "time": np.asarray(iters, dtype=np.float64) * cfg.delta_t_clock,
-        "THETA": _read_mds_single_field(run_dir, "T", iters),
-        "SALT": _read_mds_single_field(run_dir, "S", iters),
-        "UVEL": _read_mds_single_field(run_dir, "U", iters),
-        "VVEL": _read_mds_single_field(run_dir, "V", iters),
-        "ETAN": _read_mds_single_field(run_dir, "Eta", iters),
+        "THETA": _to_face_layout(
+            _read_mds_single_field(run_dir, "T", iters),
+            n_face=cfg.n_face, face_size=cfg.face_size),
+        "SALT": _to_face_layout(
+            _read_mds_single_field(run_dir, "S", iters),
+            n_face=cfg.n_face, face_size=cfg.face_size),
+        "UVEL": _to_face_layout(
+            _read_mds_single_field(run_dir, "U", iters),
+            n_face=cfg.n_face, face_size=cfg.face_size),
+        "VVEL": _to_face_layout(
+            _read_mds_single_field(run_dir, "V", iters),
+            n_face=cfg.n_face, face_size=cfg.face_size),
+        "ETAN": _to_face_layout(
+            _read_mds_single_field(run_dir, "Eta", iters),
+            n_face=cfg.n_face, face_size=cfg.face_size),
     }
 
 
@@ -463,7 +567,7 @@ def extract_global_ocean_fields(
         data: Mapping[str, np.ndarray],
         cfg: GlobalOceanRunConfig,
 ) -> tuple[list[np.ndarray], list[str], np.ndarray]:
-    """Extract the 2-D fields written to the benchmark Zarr store."""
+    """Extract the 2-D (per-face) fields written to the benchmark Zarr store."""
     tracer_k = _level_index(cfg.tracer_level, cfg.Nr, "tracer_level")
     vel_k = _level_index(cfg.velocity_level, cfg.Nr, "velocity_level")
 
@@ -489,27 +593,69 @@ def extract_global_ocean_fields(
     )
 
 
+def write_cubed_sphere_zarr(
+        out_path: Path,
+        *,
+        time_arr: np.ndarray,
+        field_arrays: list[np.ndarray],
+        field_names: list[str],
+        xc: np.ndarray,
+        yc: np.ndarray,
+        params: Mapping[str, Any] | None = None,
+        description: str = "",
+) -> None:
+    """Write a native cubed-sphere dataset to ``out_path`` (Zarr store).
+
+    Layout: dims ``(time, field, face, y, x)`` with face=6 and y=x=face_size.
+    Per-cell longitudes and latitudes are stored as 3-D coordinates ``xc`` /
+    ``yc`` of shape ``(face, y, x)``.
+    """
+    if not field_arrays:
+        raise ValueError("write_cubed_sphere_zarr: field_arrays is empty")
+    stacked = np.stack(field_arrays, axis=1).astype(np.float32)  # (time, field, face, y, x)
+
+    ds = xr.Dataset(
+        data_vars={
+            "data": (("time", "field", "face", "y", "x"), stacked),
+        },
+        coords={
+            "time": ("time", np.asarray(time_arr, dtype=np.float64)),
+            "field": ("field", np.asarray(field_names)),
+            "xc": (("face", "y", "x"), np.asarray(xc, dtype=np.float64)),
+            "yc": (("face", "y", "x"), np.asarray(yc, dtype=np.float64)),
+        },
+        attrs={
+            "description": description,
+            "grid": "cubed-sphere cs32 (6 faces, 32x32 each)",
+            "params": dict(params or {}),
+        },
+    )
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    ds.to_zarr(out_path, mode="w")
+
+
 def write_global_ocean_zarr(
         data: Mapping[str, np.ndarray],
         out_path: Path,
         cfg: GlobalOceanRunConfig,
         params: Mapping[str, Any] | None = None,
 ) -> None:
-    """Write global ocean output to a Zarr store."""
+    """Write global-ocean output to a native cubed-sphere Zarr store."""
     field_arrays, field_names, time_arr = extract_global_ocean_fields(data, cfg)
-    write_latlon_zarr(
+    grid = load_grid_cs32(cfg.grid_dir)
+    write_cubed_sphere_zarr(
         out_path,
         time_arr=time_arr,
         field_arrays=field_arrays,
         field_names=field_names,
-        lat_target=global_ocean_lat_grid(cfg.Nlat),
-        lon_target=global_ocean_lon_grid(cfg.Nlon),
+        xc=grid["xc"],
+        yc=grid["yc"],
+        params=params,
         description=(
-            "MITgcm global ocean tutorial on a 4 degree spherical-polar grid; "
+            "MITgcm global ocean cubed-sphere (cs32x15) tutorial; "
             "surface temperature/salinity, level-2 velocity, and sea surface height."
         ),
-        run_id=None,
-        params=dict(params or {}),
     )
 
 
@@ -538,7 +684,9 @@ def run_simulation(
     run_dir = out_dir / "global_ocean_run"
 
     logger.info(
-        "Starting MITgcm global ocean run: n_timesteps=%d, dump every %.3g days",
+        "Starting MITgcm global ocean run: n_iter0=%d, n_timesteps=%d, "
+        "dump every %.3g days",
+        cfg.n_iter0,
         cfg.n_timesteps,
         cfg.snapshot_interval_days,
     )
