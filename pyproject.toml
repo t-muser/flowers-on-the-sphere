@@ -23,6 +23,7 @@ dependencies = [
     "zarr",
     "wandb>=0.18",
     "natten>=0.21.6",
+    "xmitgcm>=0.5.2",
 ]
 
 [build-system]
