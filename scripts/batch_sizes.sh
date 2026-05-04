@@ -24,6 +24,7 @@ declare -gA FOTS_BATCH_SIZE=(
     [sfno:256x512]=26
     [flower:256x512]=22
     [zinnia:256x512]=9
+    [zinnia_v5:256x512]=10
     [dahlia:256x512]=9
     [dandelion:256x512]=9
     [local_r_transformer:256x512]=7
