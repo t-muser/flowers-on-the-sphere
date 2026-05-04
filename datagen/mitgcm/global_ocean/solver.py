@@ -58,17 +58,17 @@ class GlobalOceanRunConfig:
     Nlat: int = 40
     Nr: int = 15
 
-    # Tutorial timestep defaults. n_timesteps=20 gives the documented short
-    # verification run; production runs can override it or set end_time_s.
-    n_timesteps: int = 20
+    # Production default follows the tutorial recommendation: 100 model years
+    # on the 360-day MITgcm calendar.
+    n_timesteps: int = 36000
     delta_t_mom: float = 1800.0
     delta_t_tracer: float = 86400.0
     delta_t_clock: float = 86400.0
     delta_t_freesurf: float = 86400.0
 
-    # Standard MITgcm state dumps are used for dataset extraction. The tutorial
-    # uses 10-day dumps; keep that as the default.
-    snapshot_interval_days: float = 10.0
+    # Monthly output keeps 100-year runs manageable while retaining seasonal-scale
+    # variability.
+    snapshot_interval_days: float = 30.0
     monitor_freq_s: float = 1.0
     write_pickup: bool = True
 
@@ -150,10 +150,10 @@ def _is_comment(line: str) -> bool:
 
 
 def _set_namelist_value(
-    text: str,
-    block: str,
-    key: str,
-    value: bool | int | float | str,
+        text: str,
+        block: str,
+        key: str,
+        value: bool | int | float | str,
 ) -> str:
     """Set the last active occurrence of ``key`` inside ``&block``."""
     lines = text.splitlines(keepends=True)
@@ -262,8 +262,8 @@ def _write_text(path: Path, content: str) -> None:
 
 
 def stage_global_ocean_run(
-    run_dir: Path,
-    cfg: GlobalOceanRunConfig,
+        run_dir: Path,
+        cfg: GlobalOceanRunConfig,
 ) -> Path:
     """Populate a run directory with executable, inputs, and namelists."""
     run_dir = Path(run_dir)
@@ -352,9 +352,9 @@ def _find_mds_iters(run_dir: Path, prefix: str) -> list[int]:
 
 
 def _read_mds_single_field(
-    run_dir: Path,
-    prefix: str,
-    iters: list[int],
+        run_dir: Path,
+        prefix: str,
+        iters: list[int],
 ) -> np.ndarray:
     """Read a standard MITgcm MDS prefix containing one model field.
 
@@ -432,8 +432,8 @@ def _read_mds_single_field(
 
 
 def read_global_ocean_output(
-    run_dir: Path,
-    cfg: GlobalOceanRunConfig,
+        run_dir: Path,
+        cfg: GlobalOceanRunConfig,
 ) -> dict[str, np.ndarray]:
     """Read tutorial state-dump prefixes into memory."""
     run_dir = Path(run_dir)
@@ -460,8 +460,8 @@ def _level_index(level: int, Nr: int, name: str) -> int:
 
 
 def extract_global_ocean_fields(
-    data: Mapping[str, np.ndarray],
-    cfg: GlobalOceanRunConfig,
+        data: Mapping[str, np.ndarray],
+        cfg: GlobalOceanRunConfig,
 ) -> tuple[list[np.ndarray], list[str], np.ndarray]:
     """Extract the 2-D fields written to the benchmark Zarr store."""
     tracer_k = _level_index(cfg.tracer_level, cfg.Nr, "tracer_level")
@@ -490,10 +490,10 @@ def extract_global_ocean_fields(
 
 
 def write_global_ocean_zarr(
-    data: Mapping[str, np.ndarray],
-    out_path: Path,
-    cfg: GlobalOceanRunConfig,
-    params: Mapping[str, Any] | None = None,
+        data: Mapping[str, np.ndarray],
+        out_path: Path,
+        cfg: GlobalOceanRunConfig,
+        params: Mapping[str, Any] | None = None,
 ) -> None:
     """Write global ocean output to a Zarr store."""
     field_arrays, field_names, time_arr = extract_global_ocean_fields(data, cfg)
@@ -514,10 +514,10 @@ def write_global_ocean_zarr(
 
 
 def run_simulation(
-    params: Mapping[str, Any] | None,
-    out_dir: Path,
-    config: GlobalOceanRunConfig | None = None,
-    **overrides: Any,
+        params: Mapping[str, Any] | None,
+        out_dir: Path,
+        config: GlobalOceanRunConfig | None = None,
+        **overrides: Any,
 ) -> None:
     """Run one global ocean simulation and write ``run.zarr``.
 
