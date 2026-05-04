@@ -30,7 +30,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from datagen.shock_quadrants.geometry import (
+from datagen.shock_caps.geometry import (
     en_to_xyz,
     subcell_centers_latlon,
 )

@@ -1,4 +1,4 @@
-"""Mapped-sphere geometry for the shallow-water shock-quadrants solver.
+"""Mapped-sphere geometry for the shallow-water shock-caps solver.
 
 Thin wrapper around the Fortran ``sw_sphere_problem.setaux`` routine from
 clawpack's ``shallow_sphere`` example. The Calhoun–Helzel single-patch mapped

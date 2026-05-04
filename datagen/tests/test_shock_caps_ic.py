@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from datagen.shock_quadrants.geometry import (
+from datagen.shock_caps.geometry import (
     COMPUTATIONAL_LOWER,
     COMPUTATIONAL_UPPER,
     cell_centers_latlon,
