@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=mitgcm-build
+#SBATCH --job-name=mitgcm-go-build
 #SBATCH --partition=scicore
 #SBATCH --qos=30min
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --time=00:25:00
-#SBATCH --output=datagen/mitgcm/slurm/logs/build-%j.out
-#SBATCH --error=datagen/mitgcm/slurm/logs/build-%j.err
+#SBATCH --output=datagen/mitgcm/global_ocean/slurm/logs/build-%j.out
+#SBATCH --error=datagen/mitgcm/global_ocean/slurm/logs/build-%j.err
 #
-# Compile MITgcm against datagen/mitgcm/code/ overrides.
+# Compile MITgcm against datagen/mitgcm/global_ocean/code/ overrides.
 # Reads the MITgcm source tree from the `mitgcm/` git submodule.
 
 set -euo pipefail
@@ -25,18 +25,16 @@ echo "MPI_HOME=${MPI_HOME}"
 
 UV="uv run --no-sync --project datagen"
 
-mkdir -p datagen/mitgcm/slurm/logs
+mkdir -p datagen/mitgcm/global_ocean/slurm/logs
 
 # Wipe the build dir so a stale executable can't be picked up if compile fails.
-rm -rf datagen/mitgcm/build
+rm -rf datagen/mitgcm/global_ocean/build
 
-${UV} python -m datagen.mitgcm.scripts.build \
+${UV} python -m datagen.mitgcm.global_ocean.scripts.build \
     --mitgcm-root mitgcm \
     --optfile mitgcm/tools/build_options/linux_amd64_gfortran
 
 echo "=== build_info ==="
-cat datagen/mitgcm/build/build_info.json
+cat datagen/mitgcm/global_ocean/build/build_info.json
 echo "=== executable ==="
-ls -l datagen/mitgcm/build/mitgcmuv
-echo "=== input/ ==="
-ls -l datagen/mitgcm/input/
+ls -l datagen/mitgcm/global_ocean/build/mitgcmuv

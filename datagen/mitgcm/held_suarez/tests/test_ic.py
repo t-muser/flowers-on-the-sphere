@@ -5,7 +5,7 @@ statistical properties of the IC perturbation. No MITgcm binary required.
 
 Run::
 
-    uv run --project datagen pytest datagen/mitgcm/tests/test_ic.py -v
+    uv run --project datagen pytest datagen/mitgcm/held_suarez/tests/test_ic.py -v
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ import struct
 import numpy as np
 import pytest
 
-from datagen.mitgcm._constants import P0
-from datagen.mitgcm.ic import (
+from datagen.mitgcm.held_suarez._constants import P0
+from datagen.mitgcm.held_suarez.ic import (
     _write_mds_meta,
     write_bathymetry,
     write_temperature_ic,

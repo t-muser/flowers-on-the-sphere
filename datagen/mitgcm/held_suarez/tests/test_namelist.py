@@ -6,7 +6,7 @@ is required.
 
 Run::
 
-    uv run --project datagen pytest datagen/mitgcm/tests/test_namelist.py -v
+    uv run --project datagen pytest datagen/mitgcm/held_suarez/tests/test_namelist.py -v
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import re
 
 import pytest
 
-from datagen.mitgcm._constants import (
+from datagen.mitgcm.held_suarez._constants import (
     CP,
     P0,
     R_DRY,
@@ -23,7 +23,7 @@ from datagen.mitgcm._constants import (
     HS_SIGMAB,
     HS_T0,
 )
-from datagen.mitgcm.namelist import (
+from datagen.mitgcm.held_suarez.namelist import (
     write_data,
     write_data_diagnostics,
     write_data_hs_forc,

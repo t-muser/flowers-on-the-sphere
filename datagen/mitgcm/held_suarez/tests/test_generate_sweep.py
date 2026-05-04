@@ -5,7 +5,7 @@ manifest content. No MITgcm binary required.
 
 Run::
 
-    uv run --project datagen pytest datagen/mitgcm/tests/test_generate_sweep.py -v
+    uv run --project datagen pytest datagen/mitgcm/held_suarez/tests/test_generate_sweep.py -v
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import math
 
 import pytest
 
-from datagen.mitgcm.scripts.generate_sweep import (
+from datagen.mitgcm.held_suarez.scripts.generate_sweep import (
     FIXED_PARAMS,
     PARAM_GRID,
     _hash_params,

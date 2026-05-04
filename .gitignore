@@ -20,6 +20,14 @@ datagen/**/slurm/logs/*.err
 
 # Datagen-generated run configs and local data paths
 datagen/**/configs/
+!datagen/mitgcm/held_suarez/configs/
+datagen/mitgcm/held_suarez/configs/*
+!datagen/mitgcm/held_suarez/configs/short/
+datagen/mitgcm/held_suarez/configs/short/*
+!datagen/mitgcm/held_suarez/configs/short/short_run.json
+datagen/mitgcm/held_suarez/build/
+datagen/mitgcm/held_suarez/input/
+datagen/mitgcm/global_ocean/build/
 datagen/uv.lock
 /data/
 
@@ -27,7 +35,13 @@ runs/
 .claude
 .python_version
 notebooks/*.mp4
-/slurm/
+slurm/
+!datagen/mitgcm/held_suarez/slurm/
+!datagen/mitgcm/held_suarez/slurm/*.sbatch
+!datagen/mitgcm/global_ocean/slurm/
+!datagen/mitgcm/global_ocean/slurm/*.sbatch
+!datagen/cpl_aim_ocn/slurm/
+!datagen/cpl_aim_ocn/slurm/*.sbatch
 
 # MITgcm build outputs (per-component build dirs keep only `genmake_local`).
 datagen/**/build_atm/*

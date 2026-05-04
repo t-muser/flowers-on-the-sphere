@@ -5,7 +5,7 @@ Eqs. (1)–(4). No MITgcm binary is required.
 
 Run::
 
-    uv run --project datagen pytest datagen/mitgcm/tests/test_held_suarez.py -v
+    uv run --project datagen pytest datagen/mitgcm/held_suarez/tests/test_held_suarez.py -v
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import math
 import numpy as np
 import pytest
 
-from datagen.mitgcm._constants import (
+from datagen.mitgcm.held_suarez._constants import (
     KAPPA,
     P0,
     HS_KA,
@@ -27,7 +27,7 @@ from datagen.mitgcm._constants import (
     HS_T0,
     HS_T_MIN,
 )
-from datagen.mitgcm._held_suarez import (
+from datagen.mitgcm.held_suarez._physics import (
     equilibrium_temperature,
     equilibrium_temperature_K,
     newtonian_cooling_rate,
