@@ -37,17 +37,28 @@ def latitude_weights(
 
 
 def _spatial_mean(
-    x: torch.Tensor, lat_weights: Optional[torch.Tensor] = None
+    x: torch.Tensor,
+    lat_weights: Optional[torch.Tensor] = None,
+    mask: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """Weighted mean over ``(H, W)`` → ``(B, C)``.
 
     With ``lat_weights`` this is the cos-latitude-weighted spherical
-    average; without, a plain mean over spatial dims.
+    average; without, a plain mean over spatial dims. With ``mask``
+    (broadcastable to ``x``), the average is over the *unmasked* cells
+    only — i.e. land cells do not bias the mean toward zero.
     """
-    if lat_weights is None:
+    if lat_weights is None and mask is None:
         return x.mean(dim=(-2, -1))
-    w = lat_weights.view(1, 1, -1, 1)
-    return (x * w).mean(dim=(-2, -1))
+    if lat_weights is not None:
+        w = lat_weights.view(1, 1, -1, 1)
+    else:
+        w = torch.ones((), dtype=x.dtype, device=x.device)
+    if mask is None:
+        return (x * w).mean(dim=(-2, -1))
+    weighted = (x * w * mask).sum(dim=(-2, -1))
+    norm = (w * mask).sum(dim=(-2, -1)).clamp(min=1.0)
+    return weighted / norm
 
 
 def param_norm(parameters: Iterable[torch.nn.Parameter]) -> float:
@@ -74,6 +85,7 @@ def compute_loss_metrics(
     lat_weights: Optional[torch.Tensor] = None,
     field_names: Optional[list[str]] = None,
     eps: float = 1e-7,
+    mask: Optional[torch.Tensor] = None,
 ) -> Dict[str, float]:
     """Full metric suite on a single batch.
 
@@ -101,22 +113,34 @@ def compute_loss_metrics(
         f"shape mismatch: pred {tuple(y_pred.shape)} vs target {tuple(y_target.shape)}"
     )
     B, C = y_pred.shape[:2]
+    if mask is not None:
+        # Drop land contributions from both inputs so residuals/centerings
+        # are computed on ocean cells only.
+        y_pred = y_pred * mask
+        y_target = y_target * mask
     diff = y_pred - y_target
     sq = diff.pow(2)
 
     # Flat MSE (no spherical weighting).
-    flat_mse = sq.mean().item()
+    if mask is not None:
+        flat_mse = (sq.sum() / mask.sum().clamp(min=1.0)).item()
+    else:
+        flat_mse = sq.mean().item()
 
     # Sphere-weighted per-(B, C) statistics.
-    per_sample_mse = _spatial_mean(sq, lat_weights)                       # (B, C)
-    mean_y = _spatial_mean(y_target, lat_weights)                         # (B, C)
-    mean_x = _spatial_mean(y_pred, lat_weights)                           # (B, C)
+    per_sample_mse = _spatial_mean(sq, lat_weights, mask)                       # (B, C)
+    mean_y = _spatial_mean(y_target, lat_weights, mask)                         # (B, C)
+    mean_x = _spatial_mean(y_pred, lat_weights, mask)                           # (B, C)
     y_centered = y_target - mean_y[..., None, None]
     x_centered = y_pred - mean_x[..., None, None]
-    per_sample_var_y = _spatial_mean(y_centered.pow(2), lat_weights)      # (B, C)
-    per_sample_var_x = _spatial_mean(x_centered.pow(2), lat_weights)      # (B, C)
-    per_sample_norm_y = _spatial_mean(y_target.pow(2), lat_weights)       # (B, C)
-    per_sample_cov = _spatial_mean(x_centered * y_centered, lat_weights)  # (B, C)
+    if mask is not None:
+        # Centering re-introduces non-zero values on land; re-mask before var.
+        y_centered = y_centered * mask
+        x_centered = x_centered * mask
+    per_sample_var_y = _spatial_mean(y_centered.pow(2), lat_weights, mask)      # (B, C)
+    per_sample_var_x = _spatial_mean(x_centered.pow(2), lat_weights, mask)      # (B, C)
+    per_sample_norm_y = _spatial_mean(y_target.pow(2), lat_weights, mask)       # (B, C)
+    per_sample_cov = _spatial_mean(x_centered * y_centered, lat_weights, mask)  # (B, C)
 
     # Aggregated (per-field, then mean over fields).
     per_field_mse = per_sample_mse.mean(dim=0)
@@ -132,11 +156,12 @@ def compute_loss_metrics(
     vrmse_mean = per_field_vrmse.mean().item()
 
     # Unweighted (Well-style) VRMSE for direct leaderboard comparison.
-    per_sample_mse_uw = sq.mean(dim=(-2, -1))                              # (B, C)
-    mean_y_uw = y_target.mean(dim=(-2, -1))                                # (B, C)
-    per_sample_var_y_uw = (
-        (y_target - mean_y_uw[..., None, None]).pow(2).mean(dim=(-2, -1))
-    )
+    per_sample_mse_uw = _spatial_mean(sq, None, mask)                       # (B, C)
+    mean_y_uw = _spatial_mean(y_target, None, mask)                         # (B, C)
+    y_target_centered_uw = y_target - mean_y_uw[..., None, None]
+    if mask is not None:
+        y_target_centered_uw = y_target_centered_uw * mask
+    per_sample_var_y_uw = _spatial_mean(y_target_centered_uw.pow(2), None, mask)
     per_sample_vrmse_unweighted = (per_sample_mse_uw / (per_sample_var_y_uw + eps)).sqrt()
     per_field_vrmse_unweighted = per_sample_vrmse_unweighted.mean(dim=0)
     vrmse_unweighted_mean = per_field_vrmse_unweighted.mean().item()
@@ -223,11 +248,24 @@ class LatitudeWeightedMSELoss(nn.Module):
         else:
             self.register_buffer("lat_weights", weights)
 
-    def forward(self, y_pred: torch.Tensor, y_target: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        y_pred: torch.Tensor,
+        y_target: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         if "lat_weights" not in self._buffers:
             self.register_buffer(
                 "lat_weights",
                 latitude_weights(y_pred.shape[-2], grid=self.grid).to(y_pred.device),
             )
         w = self.lat_weights.view(1, 1, -1, 1)
-        return ((y_pred - y_target).pow(2) * w).mean()
+        sq = (y_pred - y_target).pow(2) * w
+        if mask is None:
+            return sq.mean()
+        # mask broadcasts as (B, C, H, W) or (1, C, H, W); zero out invalid
+        # cells and divide by the *weighted* count of valid cells so each
+        # unit of solid-angle ocean contributes equally.
+        sq = sq * mask
+        denom = (w * mask).sum().clamp(min=1.0)
+        return sq.sum() / denom

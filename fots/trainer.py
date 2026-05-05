@@ -118,17 +118,33 @@ class Trainer:
 
     @staticmethod
     def _split_batch(batch: Any):
+        """Return ``(x, y, mask)`` where ``mask`` is None unless the
+        dataloader supplied a ``valid_mask`` (per-channel ocean mask)."""
         if isinstance(batch, dict):
             x = batch.get("input_fields")
             y = batch.get("output_fields")
+            mask = batch.get("valid_mask")
             if x is None or y is None:
                 raise KeyError(
                     "dict batch must contain 'input_fields' and 'output_fields'"
                 )
-            return x, y
+            return x, y, mask
         if isinstance(batch, (list, tuple)) and len(batch) >= 2:
-            return batch[0], batch[1]
+            return batch[0], batch[1], None
         raise TypeError(f"unsupported batch type: {type(batch).__name__}")
+
+    def _compute_loss(self, y_pred, y_target, mask=None):
+        """Call the configured loss with an optional mask kwarg.
+
+        Falls back to a plain call when the loss does not accept ``mask``
+        (e.g. ``torch.nn.MSELoss``)."""
+        if mask is None:
+            return self.loss_fn(y_pred, y_target)
+        try:
+            return self.loss_fn(y_pred, y_target, mask=mask)
+        except TypeError:
+            sq = (y_pred - y_target).pow(2) * mask
+            return sq.sum() / mask.sum().clamp(min=1.0)
 
     @staticmethod
     def _fold_time_into_channels(x: torch.Tensor) -> torch.Tensor:
@@ -180,16 +196,18 @@ class Trainer:
         n_samples = 0
         t0 = time.time()
         for i, batch in enumerate(dataloader):
-            x, y = self._split_batch(batch)
+            x, y, mask = self._split_batch(batch)
             x = self._fold_time_into_channels(x.to(self.device))
             y = y.to(self.device)
+            if mask is not None:
+                mask = mask.to(self.device)
             # Single-step training predicts one frame. With n_steps_output>1
             # (e.g. when phase-2 AR also runs in this trainer) ignore the
             # extra GT frames here.
             if y.dim() == 5:
                 y = y[:, 0]
             y_pred = self.model(x)
-            loss = self.loss_fn(y_pred, y)
+            loss = self._compute_loss(y_pred, y, mask=mask)
             self.optimizer.zero_grad()
             loss.backward()
             if self.grad_clip is not None:
@@ -230,13 +248,15 @@ class Trainer:
         agg: dict[str, float] = {}
         loss_total = 0.0
         for batch in dataloader:
-            x, y = self._split_batch(batch)
+            x, y, mask = self._split_batch(batch)
             x = self._fold_time_into_channels(x.to(self.device))
             y = y.to(self.device)
+            if mask is not None:
+                mask = mask.to(self.device)
             if y.dim() == 5:
                 y = y[:, 0]
             y_pred = self.model(x)
-            loss_total += float(self.loss_fn(y_pred, y).item())
+            loss_total += float(self._compute_loss(y_pred, y, mask=mask).item())
             if self.denormalize_fn is not None:
                 y_pred_m = self.denormalize_fn(y_pred)
                 y_m = self.denormalize_fn(y)
@@ -246,6 +266,7 @@ class Trainer:
                 y_pred_m, y_m,
                 lat_weights=self.lat_weights,
                 field_names=self.field_names or None,
+                mask=mask,
             )
             for k, v in m.items():
                 agg[k] = agg.get(k, 0.0) + v
@@ -276,9 +297,11 @@ class Trainer:
         t0 = time.time()
         C = self._n_field_channels
         for i, batch in enumerate(dataloader):
-            x, y = self._split_batch(batch)
+            x, y, mask = self._split_batch(batch)
             hist = self._fold_time_into_channels(x.to(self.device))  # (B, T_in*C, H, W)
             y = y.to(self.device)  # (B, T_out, C, H, W)
+            if mask is not None:
+                mask = mask.to(self.device)
             if y.dim() != 5 or y.shape[1] < ar_steps:
                 raise ValueError(
                     f"AR training needs y of shape (B, T>=ar_steps, C, H, W); "
@@ -287,7 +310,7 @@ class Trainer:
             loss = 0.0
             for k in range(ar_steps):
                 y_pred = self.model(hist)  # (B, C, H, W)
-                loss = loss + self.loss_fn(y_pred, y[:, k])
+                loss = loss + self._compute_loss(y_pred, y[:, k], mask=mask)
                 if k < ar_steps - 1:
                     hist = torch.cat([hist[:, C:], y_pred], dim=1)
             loss = loss / ar_steps
@@ -344,9 +367,11 @@ class Trainer:
         per_step_agg: dict[int, dict[str, float]] = {}
         n_batches = 0
         for batch in dataloader:
-            x, y = self._split_batch(batch)
+            x, y, mask = self._split_batch(batch)
             hist = self._fold_time_into_channels(x.to(self.device))
             y = y.to(self.device)
+            if mask is not None:
+                mask = mask.to(self.device)
             if y.dim() != 5:
                 raise ValueError(
                     f"rollout_loop expects y of shape (B, T, C, H, W); "
@@ -366,6 +391,7 @@ class Trainer:
                     y_k_m,
                     lat_weights=self.lat_weights,
                     field_names=self.field_names or None,
+                    mask=mask,
                 )
                 step_acc = per_step_agg.setdefault(k, {})
                 for kk, vv in m.items():

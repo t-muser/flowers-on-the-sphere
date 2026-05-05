@@ -1,0 +1,31 @@
+# MITgcm global-ocean cs32x15 ensemble (243 runs, cubed-sphere on disk).
+# Sweep axes: gm_background_k × visc_ah × diff_kr × tau_theta_relax_days
+#             × tau_salt_relax_days  (3^5 = 243).
+# Per run: 1189 snapshots (30 model days each, 1 model year of spinup
+# trimmed at split time). Native cs32 zarr (data var, face=6, y=x=32);
+# the GlobalOceanDataModule regrids cs32 → (64, 128) lat/lon, rotates
+# (u_k2, v_k2) to geographic east/north, concatenates static depth +
+# day-of-year (sin, cos) input channels, and returns a per-channel
+# valid_mask for masked loss.
+data:
+  _target_: fots.data.global_ocean.GlobalOceanDataModule
+  root: ${oc.env:DATA_ROOT}/global-ocean
+  dataset_name: global_ocean
+  time_steps_per_run: 1189
+  # 5 dyn (theta_k1, salt_k1, u_east, v_north, eta) + 1 depth + 2 doy.
+  dim_in: 8
+  dim_out: 5
+  spatial_resolution: [64, 128]
+  grid: equiangular
+  field_names:
+    - theta_k1
+    - salt_k1
+    - u_k2
+    - v_k2
+    - eta
+  batch_size: 4
+  n_steps_input: 4
+  n_steps_output: 1
+  num_workers: 8
+  regrid_method: idw
+  regrid_k: 4
