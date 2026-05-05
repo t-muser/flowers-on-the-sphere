@@ -28,7 +28,7 @@ from pathlib import Path
 # weak/standard/strong mixing and weak/standard/strong air-sea restoring.
 PARAM_GRID: dict[str, tuple[float, ...]] = {
     "gm_background_k":      (250.0, 1000.0, 2500.0),
-    "visc_ah":              (2.0e5, 5.0e5, 1.0e6),
+    "visc_ah":              (1.5e5, 3.0e5, 5.0e5),
     "diff_kr":              (1.0e-5, 3.0e-5, 1.0e-4),
     "tau_theta_relax_days": (30.0, 60.0, 120.0),
     "tau_salt_relax_days":  (90.0, 180.0, 360.0),

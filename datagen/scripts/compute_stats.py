@@ -76,40 +76,84 @@ def main() -> None:
                     help="Which split to compute stats over (default: train).")
     ap.add_argument("--fields", nargs="+", required=True,
                     help="Field names in channel order (e.g. u_phi u_theta h vorticity).")
+    ap.add_argument("--var-name", default="fields",
+                    help="Zarr data variable to read (default: fields). "
+                         "Set to 'data' for the MITgcm cubed-sphere stores.")
     ap.add_argument("--out", type=Path, default=None,
                     help="Output path (defaults to <root>/stats.json).")
+    ap.add_argument("--mask-zarr", type=Path, default=None,
+                    help="Optional grid.zarr with per-field bool masks. When "
+                         "given, stats are computed only over cells where the "
+                         "field's mask is True. Combined with --field-mask.")
+    ap.add_argument("--field-mask", action="append", default=[],
+                    help="<field>=<mask_var> mapping (repeatable). Fields not "
+                         "listed use no mask. Example: --field-mask theta_k1=mask_k1")
     args = ap.parse_args()
 
     split_dir = args.root / args.split
     zarr_paths = _scan_zarrs(split_dir)
     n_fields = len(args.fields)
 
+    field_mask: dict[str, str] = {}
+    for spec in args.field_mask:
+        if "=" not in spec:
+            ap.error(f"--field-mask expects <field>=<mask_var>, got {spec!r}")
+        k, v = spec.split("=", 1)
+        field_mask[k] = v
+
+    masks_per_field: dict[str, np.ndarray | None] = {name: None for name in args.fields}
+    if args.mask_zarr is not None:
+        grid = xr.open_zarr(str(args.mask_zarr))
+        for name in args.fields:
+            mvar = field_mask.get(name)
+            if mvar is None:
+                continue
+            if mvar not in grid:
+                ap.error(f"mask var {mvar!r} not in {args.mask_zarr}")
+            masks_per_field[name] = grid[mvar].values.astype(bool)
+
     print(f"Computing stats over {len(zarr_paths)} runs in {split_dir}")
     print(f"Fields: {args.fields}")
+    if any(m is not None for m in masks_per_field.values()):
+        print(f"Masks:  " + ", ".join(
+            f"{n}=({field_mask.get(n, 'none')})" for n in args.fields
+        ))
 
     # Per-field Welford accumulators: (n, mean, M2)
     acc = [(0, 0.0, 0.0)] * n_fields
     acc_delta = [(0, 0.0, 0.0)] * n_fields
 
+    skipped: list[str] = []
     for i, path in enumerate(zarr_paths):
-        ds = xr.open_zarr(str(path), consolidated=True)
-        data = ds["fields"].values  # (time, field, lat, lon)
+        ds = xr.open_zarr(str(path), consolidated=None)
+        data = ds[args.var_name].values  # (time, field, *spatial)
 
-        for f in range(n_fields):
-            field_data = data[:, f, :, :]           # (time, lat, lon)
-            delta_data = np.diff(field_data, axis=0) # (time-1, lat, lon)
+        if not np.all(np.isfinite(data)):
+            print(f"  skip {path.name}: non-finite values (likely failed solve)")
+            skipped.append(path.name)
+            continue
 
-            # Welford update using parallel combine with a per-run accumulator
-            flat = field_data.ravel().astype(np.float64)
+        for f, name in enumerate(args.fields):
+            field_data = data[:, f]                 # (time, *spatial)
+            delta_data = np.diff(field_data, axis=0) # (time-1, *spatial)
+
+            mask = masks_per_field[name]
+            if mask is None:
+                flat = field_data.ravel().astype(np.float64)
+                flat_d = delta_data.ravel().astype(np.float64)
+            else:
+                # Broadcast (spatial) mask across time, drop masked cells.
+                flat = field_data[..., mask].ravel().astype(np.float64)
+                flat_d = delta_data[..., mask].ravel().astype(np.float64)
+
             n_r = flat.size
-            mean_r = float(flat.mean())
-            M2_r = float(((flat - mean_r) ** 2).sum())
+            mean_r = float(flat.mean()) if n_r else 0.0
+            M2_r = float(((flat - mean_r) ** 2).sum()) if n_r else 0.0
             acc[f] = _combine(*acc[f], n_r, mean_r, M2_r)
 
-            flat_d = delta_data.ravel().astype(np.float64)
             n_d = flat_d.size
-            mean_d = float(flat_d.mean())
-            M2_d = float(((flat_d - mean_d) ** 2).sum())
+            mean_d = float(flat_d.mean()) if n_d else 0.0
+            M2_d = float(((flat_d - mean_d) ** 2).sum()) if n_d else 0.0
             acc_delta[f] = _combine(*acc_delta[f], n_d, mean_d, M2_d)
 
         if (i + 1) % 50 == 0 or (i + 1) == len(zarr_paths):
@@ -135,6 +179,8 @@ def main() -> None:
         json.dump(stats, fp, indent=2)
         fp.write("\n")
     print(f"\nWrote {out_path}")
+    if skipped:
+        print(f"Skipped {len(skipped)} non-finite runs: {skipped}")
 
 
 if __name__ == "__main__":

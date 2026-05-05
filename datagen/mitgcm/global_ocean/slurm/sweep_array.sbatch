@@ -1,13 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=mitgcm-go-preflight
+#SBATCH --job-name=mitgcm-go-sweep
 #SBATCH --partition=scicore
+#SBATCH --qos=1day
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --time=02:00:00
-#SBATCH --array=0-31
-#SBATCH --output=datagen/mitgcm/global_ocean/slurm/logs/preflight-%A_%a.out
-#SBATCH --error=datagen/mitgcm/global_ocean/slurm/logs/preflight-%A_%a.err
+#SBATCH --time=08:00:00
+#SBATCH --array=0-242
+#SBATCH --output=datagen/mitgcm/global_ocean/slurm/logs/sweep-%A_%a.out
+#SBATCH --error=datagen/mitgcm/global_ocean/slurm/logs/sweep-%A_%a.err
 
 set -euo pipefail
 
@@ -25,24 +26,21 @@ UV="uv run --no-sync --project datagen"
 : "${DATA_ROOT:=/scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/global-ocean}"
 : "${EXECUTABLE:=$(pwd)/datagen/mitgcm/global_ocean/build/mitgcmuv}"
 
-TASK_ID=$(printf "%02d" "${SLURM_ARRAY_TASK_ID}")
-CONFIG="datagen/mitgcm/global_ocean/configs/preflight/corner_${TASK_ID}.json"
-OUT_DIR="${DATA_ROOT}/preflight/corner_${TASK_ID}"
+TASK_ID=$(printf "%04d" "${SLURM_ARRAY_TASK_ID}")
+CONFIG="datagen/mitgcm/global_ocean/configs/run_${TASK_ID}.json"
+OUT_DIR="${DATA_ROOT}/sweep/run_${TASK_ID}"
 
 mkdir -p "${OUT_DIR%/*}" datagen/mitgcm/global_ocean/slurm/logs
 rm -rf "${OUT_DIR}" "${OUT_DIR}.FAILED"
 
-echo "=== global-ocean preflight corner_${TASK_ID}"
+echo "=== global-ocean sweep run_${TASK_ID}"
 echo "    config:     ${CONFIG}"
 echo "    out_dir:    ${OUT_DIR}"
 echo "    executable: ${EXECUTABLE}"
-
-: "${PREFLIGHT_TIMESTEPS:=365}"
-: "${PREFLIGHT_SNAPSHOT_DAYS:=30}"
 
 ${UV} python -m datagen.mitgcm.global_ocean.scripts.preflight run \
     --config "${CONFIG}" \
     --out-dir "${OUT_DIR}" \
     --executable "${EXECUTABLE}" \
-    --n-timesteps "${PREFLIGHT_TIMESTEPS}" \
-    --snapshot-interval-days "${PREFLIGHT_SNAPSHOT_DAYS}"
+    --n-timesteps 36000 \
+    --snapshot-interval-days 30

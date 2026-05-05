@@ -26,7 +26,7 @@ export NUMEXPR_NUM_THREADS=1
 
 UV="uv run --no-sync --project datagen"
 
-: "${DATA_ROOT:=/scicore/home/rothvo/abati0000/fots-data/mitgcm/global-ocean}"
+: "${DATA_ROOT:=/scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/global-ocean}"
 : "${EXECUTABLE:=$(pwd)/datagen/mitgcm/global_ocean/build/mitgcmuv}"
 : "${CORNER:=00}"
 

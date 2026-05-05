@@ -13,10 +13,12 @@ def parse_mds_meta(path: Path) -> dict[str, Any]:
     """Parse the subset of MITgcm MDS metadata needed by the datagen readers."""
     text = Path(path).read_text()
 
-    def _int_value(name: str) -> int:
+    def _int_value(name: str, default: int | None = None) -> int | None:
         match = re.search(rf"{name}\s*=\s*\[\s*([0-9]+)\s*\]", text)
         if match is None:
-            raise ValueError(f"{path}: missing {name}")
+            if default is None:
+                raise ValueError(f"{path}: missing {name}")
+            return default
         return int(match.group(1))
 
     dim_match = re.search(r"dimList\s*=\s*\[(.*?)\];", text, re.S)
@@ -46,7 +48,8 @@ def parse_mds_meta(path: Path) -> dict[str, Any]:
         "dim_list": dim_list,
         "dataprec": dataprec,
         "nrecords": _int_value("nrecords"),
-        "time_step": _int_value("timeStepNumber"),
+        # Static grid MDS files (Depth, hFacC, XC, ...) have no timeStepNumber.
+        "time_step": _int_value("timeStepNumber", default=-1),
         "fields": fields,
     }
 
