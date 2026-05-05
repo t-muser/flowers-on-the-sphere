@@ -375,7 +375,7 @@ def run_simulation(
             )
 
     logger.info(
-        "Starting cpl_aim+ocn run: CO2=%.0f ppm  solar=%.3f×TSI  "
+        "Starting cpl_aim+ocn run: CO2=%.0f ppm  solar=%.3f×AIM_SOLC  "
         "κ_GM=%.0f m²/s  seed=%d",
         sim.co2_ppm, sim.solar_scale, sim.gm_kappa, sim.seed,
     )

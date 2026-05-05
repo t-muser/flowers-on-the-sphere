@@ -115,8 +115,8 @@ class TestSimulationParams:
         assert sweep.solar_scale == sim.solar_scale
         assert sweep.gm_kappa == sim.gm_kappa
         assert sweep.seed == sim.seed
-        # And the derived TSI scales correctly.
-        assert abs(sweep.solar_const_w_m2 - 1.03 * 1365.0) < 1e-9
+        # And the derived AIM area-mean solar constant scales correctly.
+        assert abs(sweep.solar_const_w_m2 - 1.03 * 342.0) < 1e-9
 
 
 # ─── Phase namelist construction ─────────────────────────────────────────────
@@ -426,7 +426,7 @@ class TestRunSimulationOrchestration:
         a = recorded_attrs[0]
         assert a["co2_ppm"] == 560.0
         assert a["solar_scale"] == 1.03
-        assert abs(a["solar_const_w_m2"] - 1.03 * 1365.0) < 1e-9
+        assert abs(a["solar_const_w_m2"] - 1.03 * 342.0) < 1e-9
         assert a["gm_kappa"] == 2000.0
         assert a["seed"] == 3
         # `params` is a JSON-encoded copy of the input dict.

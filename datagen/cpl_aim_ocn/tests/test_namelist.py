@@ -254,18 +254,18 @@ class TestRenderAtmData:
 
 class TestRenderAtmAimphys:
     def test_co2_select_set_to_1(self):
-        out = render_atm_aimphys(co2_ppm=348.0, solar_const_w_m2=1365.0)
+        out = render_atm_aimphys(co2_ppm=348.0, solar_const_w_m2=342.0)
         assert "aim_select_pCO2=1" in out
 
-    def test_co2_value_round_trips(self):
+    def test_co2_ppm_converts_to_aim_mole_fraction(self):
         for ppm in (280.0, 348.0, 560.0, 1120.0):
-            out = render_atm_aimphys(co2_ppm=ppm, solar_const_w_m2=1365.0)
+            out = render_atm_aimphys(co2_ppm=ppm, solar_const_w_m2=342.0)
             m = re.search(r"aim_fixed_pCO2=([\d\.eE+\-]+)", out)
             assert m is not None
-            assert abs(float(m.group(1)) - ppm) < 1e-3
+            assert abs(float(m.group(1)) - ppm * 1e-6) < 1e-12
 
     def test_solar_value_round_trips(self):
-        for s in (1325.0, 1365.0, 1405.0):
+        for s in (331.74, 342.0, 352.26):
             out = render_atm_aimphys(co2_ppm=348.0, solar_const_w_m2=s)
             m = re.search(r"\bSOLC=([\d\.eE+\-]+)", out)
             assert m is not None
@@ -274,11 +274,16 @@ class TestRenderAtmAimphys:
     def test_solc_inserted_into_aim_par_for_block(self):
         # The upstream &AIM_PAR_FOR block is empty; SOLC must be
         # inserted there (not into &AIM_PARAMS).
-        out = render_atm_aimphys(co2_ppm=348.0, solar_const_w_m2=1365.0)
+        out = render_atm_aimphys(co2_ppm=348.0, solar_const_w_m2=342.0)
         # Find the AIM_PAR_FOR block boundaries.
         start = out.index("&AIM_PAR_FOR")
         end = out.index(" &", start + 1)
         assert "SOLC=" in out[start:end]
+
+    def test_reference_like_values_render_in_aim_units(self):
+        out = render_atm_aimphys(co2_ppm=320.0, solar_const_w_m2=342.0)
+        assert "aim_fixed_pCO2=0.00032" in out
+        assert re.search(r"\bSOLC=342\.?\b", out), out
 
 
 # ─── Atmosphere: render_atm_pkg + render_atm_diagnostics ─────────────────────
@@ -538,13 +543,35 @@ class TestRenderPhaseNamelists:
                               snapshot_interval_s=86400.0)
         nls = render_phase_namelists(time_cfg=cfg, sweep=sweep)
         # CO2 + solar in atm/data.aimphys
-        assert "aim_fixed_pCO2=560" in nls["atm"]["data.aimphys"]
-        # 1.03 * 1365 = 1405.95
+        assert "aim_fixed_pCO2=0.00056" in nls["atm"]["data.aimphys"]
+        # 1.03 * 342 = 352.26
         m = re.search(r"\bSOLC=([\d\.eE+\-]+)",
                       nls["atm"]["data.aimphys"])
-        assert m is not None and abs(float(m.group(1)) - 1405.95) < 1e-3
+        assert m is not None and abs(float(m.group(1)) - 352.26) < 1e-3
         # GM kappa in ocn/data.gmredi
         assert "GM_background_K=2000" in nls["ocn"]["data.gmredi"]
+
+    def test_run0000_like_values_render_in_aim_units(self):
+        cfg = PhaseTimeConfig(n_atm_steps=40, n_ocn_steps=5,
+                              snapshot_interval_s=86400.0)
+        sweep = SweepParams(co2_ppm=280.0, solar_scale=0.97,
+                            gm_kappa=500.0, seed=0)
+        nls = render_phase_namelists(time_cfg=cfg, sweep=sweep)
+        assert "aim_fixed_pCO2=0.00028" in nls["atm"]["data.aimphys"]
+        m = re.search(r"\bSOLC=([\d\.eE+\-]+)",
+                      nls["atm"]["data.aimphys"])
+        assert m is not None and abs(float(m.group(1)) - 331.74) < 1e-3
+
+    def test_reference_like_sweep_values_match_upstream_units(self):
+        cfg = PhaseTimeConfig(n_atm_steps=40, n_ocn_steps=5,
+                              snapshot_interval_s=86400.0)
+        sweep = SweepParams(co2_ppm=320.0, solar_scale=1.0,
+                            gm_kappa=800.0, seed=0)
+        nls = render_phase_namelists(time_cfg=cfg, sweep=sweep)
+        assert "aim_fixed_pCO2=0.00032" in nls["atm"]["data.aimphys"]
+        assert re.search(r"\bSOLC=342\.?\b", nls["atm"]["data.aimphys"])
+        assert "GM_background_K=800." in nls["ocn"]["data.gmredi"]
+        assert "GM_isopycK=800." in nls["ocn"]["data.gmredi"]
 
     def test_pickup_handling_phase1_ocn_uses_baseline(self, sweep):
         # Phase 1 spin-up: ocean restarts from the global_ocean.cs32x15
@@ -565,7 +592,7 @@ class TestSweepParams:
     def test_solar_const_derived_correctly(self):
         s = SweepParams(co2_ppm=348.0, solar_scale=1.00,
                         gm_kappa=1000.0, seed=0)
-        assert abs(s.solar_const_w_m2 - 1365.0) < 1e-9
+        assert abs(s.solar_const_w_m2 - 342.0) < 1e-9
         s2 = SweepParams(co2_ppm=348.0, solar_scale=0.97,
                          gm_kappa=1000.0, seed=0)
-        assert abs(s2.solar_const_w_m2 - 0.97 * 1365.0) < 1e-9
+        assert abs(s2.solar_const_w_m2 - 0.97 * 342.0) < 1e-9

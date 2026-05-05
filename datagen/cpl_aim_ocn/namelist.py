@@ -16,8 +16,9 @@ actually vary across phases or ensemble members:
 | ``atm/data``          | ``nIter0``, ``nTimeSteps``, ``deltaT``, ``pChkptFreq``,     |
 |                       | ``dumpFreq``, ``monitorFreq``, ``pickupSuff`` (phase 2),    |
 |                       | ``hydrogThetaFile`` (per-seed perturbation IC)              |
-| ``atm/data.aimphys``  | ``aim_select_pCO2``, ``aim_fixed_pCO2`` (CO2 sweep);        |
-|                       | ``SOLC`` in ``&AIM_PAR_FOR`` (solar sweep)                  |
+| ``atm/data.aimphys``  | ``aim_select_pCO2``, ``aim_fixed_pCO2`` (CO2 sweep; JSON    |
+|                       | stores ppm, AIM expects mole fraction); ``SOLC`` in         |
+|                       | ``&AIM_PAR_FOR`` (area-mean solar sweep)                    |
 | ``atm/data.pkg``      | ``useDiagnostics`` (off in spin-up, on in data phase)       |
 | ``atm/data.diagnostics`` | **New file** — generated from scratch (upstream has none)|
 | ``ocn/data``          | same time-related keys as ``atm/data`` plus ``pickupSuff``  |
@@ -271,13 +272,15 @@ def render_atm_aimphys(
     """Render ``rank_2/data.aimphys`` with sweep CO2 + solar values.
 
     Sets ``aim_select_pCO2 = 1`` (use a fixed value) and
-    ``aim_fixed_pCO2 = co2_ppm`` in ``&AIM_PARAMS``, plus ``SOLC`` in
-    ``&AIM_PAR_FOR``. All other AIM physics defaults are inherited
-    from the template.
+    ``aim_fixed_pCO2 = co2_ppm * 1e-6`` in ``&AIM_PARAMS``. The sweep
+    JSON uses human-facing ppm, while AIM's radiation code expects a
+    dry-air mole fraction. ``SOLC`` is AIM's area-mean incoming solar
+    constant (upstream default 342 W/m²), not top-of-atmosphere TSI.
+    All other AIM physics defaults are inherited from the template.
     """
     text = _read_template("atm", "data.aimphys")
     text = _set(text, "AIM_PARAMS", "aim_select_pCO2", 1)
-    text = _set(text, "AIM_PARAMS", "aim_fixed_pCO2", float(co2_ppm))
+    text = _set(text, "AIM_PARAMS", "aim_fixed_pCO2", float(co2_ppm) * 1.0e-6)
     text = _set(text, "AIM_PAR_FOR", "SOLC", float(solar_const_w_m2))
     return text
 
@@ -603,11 +606,11 @@ class SweepParams:
     same dataclass round-trips cleanly through generate_sweep.py.
     """
     co2_ppm: float
-    solar_scale: float        # multiplier applied to 1365 W/m²
+    solar_scale: float        # multiplier applied to AIM SOLC=342 W/m²
     gm_kappa: float           # m²/s
     seed: int
 
-    SOLAR_REF: float = field(default=1365.0, init=False, repr=False)
+    SOLAR_REF: float = field(default=342.0, init=False, repr=False)
 
     @property
     def solar_const_w_m2(self) -> float:

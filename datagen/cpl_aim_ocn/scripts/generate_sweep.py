@@ -2,8 +2,10 @@
 
 The cpl_aim+ocn parameter grid is a tensor product over four axes:
 
-* ``co2_ppm`` — atmospheric CO2 concentration (4 values)
-* ``solar_scale`` — multiplier on the 1365 W/m² solar constant (3 values)
+* ``co2_ppm`` — atmospheric CO2 concentration in ppm (4 values; converted
+  to AIM's mole-fraction namelist value at render time)
+* ``solar_scale`` — multiplier on AIM's area-mean 342 W/m² solar constant
+  (3 values)
 * ``gm_kappa`` — ocean GM-Redi background diffusivity, m²/s (3 values)
 * ``seed`` — atmospheric IC perturbation RNG seed (5 values)
 
@@ -34,7 +36,7 @@ from pathlib import Path
 # axes listed earlier vary slower in the run index.
 PARAM_GRID: dict[str, tuple] = {
     "co2_ppm":     (280.0, 348.0, 560.0, 1120.0),  # pre-industrial → 4×PI
-    "solar_scale": (0.97, 1.00, 1.03),             # ±3% on TSI
+    "solar_scale": (0.97, 1.00, 1.03),             # ±3% on AIM area-mean SOLC
     "gm_kappa":    (500.0, 1000.0, 2000.0),        # m²/s, GM-Redi κ
     "seed":        (0, 1, 2, 3, 4),                # IC perturbation seed
 }
