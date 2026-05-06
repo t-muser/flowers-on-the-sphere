@@ -70,7 +70,16 @@ def _parse_args() -> argparse.Namespace:
     )
     ap.add_argument(
         "--pressure-hpa", type=float, default=None, dest="pressure_hpa",
-        help="Pressure level to extract for u, v, T [hPa].",
+        help="Pressure level to extract for u, v, T [hPa] (single-level mode).",
+    )
+    ap.add_argument(
+        "--pressure-levels", type=float, nargs="+", default=None,
+        dest="pressure_levels",
+        help=(
+            "Multiple pressure levels [hPa] for 3-D output. When set, the "
+            "writer emits per-variable u/v/T arrays with a `level` axis "
+            "instead of the legacy single-level Zarr."
+        ),
     )
     ap.add_argument(
         "--delta-t", type=float, default=None, dest="delta_t",
@@ -100,11 +109,11 @@ def main() -> int:
     rc_field_names = {f.name for f in fields(RunConfig)}
     overrides: dict = {}
     for dest in ("n_mpi", "spinup_days", "data_days", "snapshot_interval_days",
-                 "pressure_hpa", "delta_t", "executable"):
+                 "pressure_hpa", "pressure_levels", "delta_t", "executable"):
         assert dest in rc_field_names, f"Unknown RunConfig field: {dest!r}"
         val = getattr(args, dest, None)
         if val is not None:
-            overrides[dest] = val
+            overrides[dest] = tuple(val) if dest == "pressure_levels" else val
 
     try:
         run_simulation(params, out_dir, **overrides)

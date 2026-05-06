@@ -53,7 +53,12 @@ from datagen.mitgcm.held_suarez.ic import (
     write_temperature_ic,
 )
 from datagen.mitgcm.held_suarez.namelist import write_all_namelists
-from datagen.resample import write_latlon_zarr, regular_lat_grid, regular_lon_grid
+from datagen.resample import (
+    regular_lat_grid,
+    regular_lon_grid,
+    write_latlon_zarr,
+    write_latlon_zarr_3d,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +91,12 @@ class RunConfig:
         spinup_days:   Spin-up duration [days] — run without output.
         data_days:     Data-collection duration [days] — daily snapshots saved.
         snapshot_interval_days: Output cadence [days].
-        pressure_hpa:  Pressure level [hPa] to extract for u, v, T output.
+        pressure_hpa:  Single pressure level [hPa] to extract for u, v, T
+                       output when ``pressure_levels`` is None (legacy mode).
+        pressure_levels: Optional tuple of pressure levels [hPa]. If set,
+                       the Zarr is written in 3-D mode with a ``level`` axis
+                       and per-variable arrays ``u``, ``v``, ``T`` plus 2-D
+                       ``ps``; ``pressure_hpa`` is ignored.
         executable:    Path to the compiled ``mitgcmuv`` binary.
         input_dir:     Directory of static input files (bathymetry, grid)
                        symlinked into every run dir. Defaults to ``input/``
@@ -110,6 +120,11 @@ class RunConfig:
 
     # Output.
     pressure_hpa: float = 500.0
+    # Optional multi-level (3-D) output. When None, the writer emits the
+    # legacy single-level Zarr (4 fields: u_<P>hpa, v_<P>hpa, T_<P>hpa, ps).
+    # When a tuple of hPa values is supplied, the writer emits a per-variable
+    # 3-D Zarr with a `level` axis (u/v/T at each level + 2-D ps).
+    pressure_levels: tuple[float, ...] | None = None
 
     # Infrastructure.
     executable: Path = field(default_factory=lambda: _DEFAULT_EXECUTABLE)
@@ -505,17 +520,94 @@ def _extract_fields(
     return field_arrays, field_names, time_arr
 
 
+def _extract_fields_3d(
+    data: dict[str, np.ndarray],
+    cfg: RunConfig,
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], np.ndarray, np.ndarray, np.ndarray]:
+    """Extract a multi-level snapshot stack from the MITgCM diagnostic arrays.
+
+    For each requested level in ``cfg.pressure_levels`` we pick the nearest
+    model-k centre and stack the resulting slabs along a new ``level`` axis.
+
+    Returns:
+        fields_3d:           {'u': arr, 'v': arr, 'T': arr} with arr shape
+                             (Nt, Nlevel, Nlat, Nlon) float32.
+        fields_2d:           {'ps': arr} with arr shape (Nt, Nlat, Nlon).
+        level_hpa:           Requested levels [hPa], shape (Nlevel,).
+        pressure_actual_hpa: Actual model-k centre [hPa] for each requested
+                             level, shape (Nlevel,).
+        time_arr:            Time coordinate in seconds since data-collection
+                             start.
+    """
+    assert cfg.pressure_levels is not None and len(cfg.pressure_levels) > 0
+    z_vals = data["pressure"]  # Pa, surface to top
+    level_hpa = np.asarray(cfg.pressure_levels, dtype=np.float64)
+    k_indices = np.array(
+        [int(np.argmin(np.abs(z_vals - p * 100.0))) for p in level_hpa],
+        dtype=int,
+    )
+    pressure_actual_hpa = (z_vals[k_indices] / 100.0).astype(np.float64)
+    for req, act, k in zip(level_hpa, pressure_actual_hpa, k_indices):
+        logger.info(
+            "Extracting pressure level %.0f hPa (nearest: %.1f hPa, k=%d)",
+            req, act, k,
+        )
+
+    u = data["UVEL"][:, k_indices, :, :].astype(np.float32)
+    v = data["VVEL"][:, k_indices, :, :].astype(np.float32)
+    T = data["THETA"][:, k_indices, :, :].astype(np.float32)
+    ps = (data["ETAN"] + P0).astype(np.float32)
+
+    fields_3d = {"u": u, "v": v, "T": T}
+    fields_2d = {"ps": ps}
+
+    time_s = data["time"].astype(np.float64)
+    time_arr = time_s - time_s[0]
+
+    return fields_3d, fields_2d, level_hpa, pressure_actual_hpa, time_arr
+
+
 def _write_zarr(
     ds,
     out_path: Path,
     cfg: RunConfig,
     params: dict,
 ) -> None:
-    """Extract pressure-level fields and write the benchmark Zarr store."""
-    field_arrays, field_names, time_arr = _extract_fields(ds, cfg)
+    """Extract pressure-level fields and write the benchmark Zarr store.
 
+    Branches on ``cfg.pressure_levels``:
+      - ``None``  → legacy single-level Zarr via ``write_latlon_zarr``.
+      - tuple    → multi-level 3-D Zarr via ``write_latlon_zarr_3d``.
+    """
     lat_target = regular_lat_grid(cfg.Nlat)
     lon_target = regular_lon_grid(cfg.Nlon)
+
+    if cfg.pressure_levels is not None and len(cfg.pressure_levels) > 0:
+        fields_3d, fields_2d, level_hpa, pressure_actual_hpa, time_arr = (
+            _extract_fields_3d(ds, cfg)
+        )
+        levels_label = ", ".join(f"{p:g}" for p in level_hpa)
+        write_latlon_zarr_3d(
+            out_path,
+            time_arr=time_arr,
+            fields_3d=fields_3d,
+            fields_2d=fields_2d,
+            lat_target=lat_target,
+            lon_target=lon_target,
+            level_hpa=level_hpa,
+            pressure_actual_hpa=pressure_actual_hpa,
+            description=(
+                f"MITgcm Held-Suarez GCM, sphericalpolar "
+                f"{cfg.Nlon}×{cfg.Nlat}×{cfg.Nr}, "
+                f"u/v/T at [{levels_label}] hPa + surface pressure."
+            ),
+            run_id=None,
+            params=params,
+        )
+        logger.info("Wrote 3-D Zarr store to %s", out_path)
+        return
+
+    field_arrays, field_names, time_arr = _extract_fields(ds, cfg)
 
     write_latlon_zarr(
         out_path,

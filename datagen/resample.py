@@ -281,6 +281,91 @@ def write_latlon_zarr(
     ds.to_zarr(str(out_path), mode="w", consolidated=True, encoding=encoding)
 
 
+def write_latlon_zarr_3d(
+    out_path: Path,
+    time_arr: np.ndarray,
+    fields_3d: Mapping[str, np.ndarray],
+    fields_2d: Mapping[str, np.ndarray],
+    lat_target: np.ndarray,
+    lon_target: np.ndarray,
+    level_hpa: np.ndarray,
+    *,
+    description: str,
+    run_id: int | None,
+    params: dict | None,
+    pressure_actual_hpa: np.ndarray | None = None,
+    time_units: str = "seconds since simulation start",
+) -> None:
+    """Write a multi-level Zarr store with per-variable 3-D and 2-D fields.
+
+    Schema:
+      - ``<name>(time, level, lat, lon)`` for each entry in ``fields_3d``.
+      - ``<name>(time, lat, lon)`` for each entry in ``fields_2d``.
+      - Coords: ``time``, ``level`` (requested hPa values), ``lat``, ``lon``.
+      - Optional ``pressure_actual_hpa(level)`` coord — the actual model
+        pressure each requested level resolved to.
+
+    Lat/lon are passed in radians and stored on disk in degrees, matching
+    ``write_latlon_zarr``.
+    """
+    out_path = Path(out_path)
+    Nlat = lat_target.size
+    Nlon = lon_target.size
+    Nlevel = level_hpa.size
+
+    for name, arr in fields_3d.items():
+        if arr.shape[1:] != (Nlevel, Nlat, Nlon):
+            raise ValueError(
+                f"fields_3d[{name!r}] has shape {arr.shape}, "
+                f"expected (*, {Nlevel}, {Nlat}, {Nlon})."
+            )
+    for name, arr in fields_2d.items():
+        if arr.shape[1:] != (Nlat, Nlon):
+            raise ValueError(
+                f"fields_2d[{name!r}] has shape {arr.shape}, "
+                f"expected (*, {Nlat}, {Nlon})."
+            )
+
+    coords: dict = {
+        "time":  ("time",  time_arr.astype(np.float64)),
+        "level": ("level", level_hpa.astype(np.float64)),
+        "lat":   ("lat",   np.rad2deg(lat_target).astype(np.float64)),
+        "lon":   ("lon",   np.rad2deg(lon_target).astype(np.float64)),
+    }
+    if pressure_actual_hpa is not None:
+        coords["pressure_actual_hpa"] = ("level", pressure_actual_hpa.astype(np.float64))
+
+    data_vars: dict = {}
+    for name, arr in fields_3d.items():
+        data_vars[name] = (("time", "level", "lat", "lon"), arr)
+    for name, arr in fields_2d.items():
+        data_vars[name] = (("time", "lat", "lon"), arr)
+
+    ds = xr.Dataset(
+        data_vars=data_vars,
+        coords=coords,
+        attrs={
+            "description": description,
+            "time_units":  time_units,
+            "lat_units":   "degrees_north",
+            "lon_units":   "degrees_east",
+            "level_units": "hPa",
+            "run_id":      run_id if run_id is not None else -1,
+            **({f"param_{k}": v for k, v in params.items()} if params else {}),
+        },
+    )
+
+    encoding = {
+        name: {"chunks": (1, Nlevel, Nlat, Nlon)} for name in fields_3d
+    }
+    encoding.update({
+        name: {"chunks": (1, Nlat, Nlon)} for name in fields_2d
+    })
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    ds.to_zarr(str(out_path), mode="w", consolidated=True, encoding=encoding)
+
+
 def resample_unstructured_run(
     raw_path: Path,
     out_path: Path,
