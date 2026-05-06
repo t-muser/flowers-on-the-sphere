@@ -8,8 +8,11 @@ import numpy as np
 import pytest
 
 from datagen.mitgcm.global_ocean import (
+    GLOBAL_OCEAN_DEL_R,
     GlobalOceanRunConfig,
+    depth_centers,
     extract_global_ocean_fields,
+    extract_global_ocean_fields_3d,
     read_global_ocean_output,
     render_data,
     render_data_gmredi,
@@ -261,3 +264,91 @@ def test_read_and_extract_global_ocean_output(tmp_path):
     assert fields[0][0, 0, 0, 0] == pytest.approx(11.0)
     assert fields[2][0, 0, 0, 0] == pytest.approx(13.0)
     assert fields[4][1, 0, 0, 0] == pytest.approx(27.0)
+
+
+def test_depth_centers_matches_cumulative_thicknesses():
+    centers = depth_centers()
+    assert centers.shape == (len(GLOBAL_OCEAN_DEL_R),)
+    # First level: half the first thickness.
+    assert centers[0] == pytest.approx(0.5 * GLOBAL_OCEAN_DEL_R[0])
+    # Second level: first thickness + half the second.
+    assert centers[1] == pytest.approx(
+        GLOBAL_OCEAN_DEL_R[0] + 0.5 * GLOBAL_OCEAN_DEL_R[1]
+    )
+    # Last center is shallower than total water column.
+    assert centers[-1] < float(np.sum(GLOBAL_OCEAN_DEL_R))
+
+
+def test_extract_global_ocean_fields_3d_stacks_selected_levels():
+    cfg = GlobalOceanRunConfig(
+        n_face=2, face_size=3, Nr=4, delta_t_clock=10.0,
+        levels=(1, 3),
+    )
+    n_face = 2
+    fs = 3
+    Nt = 2
+    rng = np.random.default_rng(0)
+    data = {
+        "time": np.array([10.0, 20.0]),
+        "THETA": rng.standard_normal((Nt, cfg.Nr, n_face, fs, fs)).astype(np.float32),
+        "SALT":  rng.standard_normal((Nt, cfg.Nr, n_face, fs, fs)).astype(np.float32),
+        "UVEL":  rng.standard_normal((Nt, cfg.Nr, n_face, fs, fs)).astype(np.float32),
+        "VVEL":  rng.standard_normal((Nt, cfg.Nr, n_face, fs, fs)).astype(np.float32),
+        "ETAN":  rng.standard_normal((Nt, n_face, fs, fs)).astype(np.float32),
+    }
+
+    fields_3d, fields_2d, level_idx, time_arr = extract_global_ocean_fields_3d(
+        data, cfg
+    )
+
+    assert set(fields_3d) == {"theta", "salt", "u", "v"}
+    for arr in fields_3d.values():
+        assert arr.shape == (Nt, 2, n_face, fs, fs)
+        assert arr.dtype == np.float32
+    assert fields_2d["eta"].shape == (Nt, n_face, fs, fs)
+    np.testing.assert_array_equal(level_idx, np.array([1, 3]))
+    np.testing.assert_array_equal(time_arr, np.array([0.0, 10.0]))
+    np.testing.assert_array_equal(fields_3d["theta"][:, 0], data["THETA"][:, 0])
+    np.testing.assert_array_equal(fields_3d["theta"][:, 1], data["THETA"][:, 2])
+
+
+def test_write_cubed_sphere_zarr_3d_emits_per_variable_layout(tmp_path):
+    import xarray as xr
+
+    from datagen.mitgcm.global_ocean import write_cubed_sphere_zarr_3d
+
+    n_face, fs = 6, 4
+    Nt, Nlevel = 2, 3
+    rng = np.random.default_rng(1)
+    fields_3d = {
+        name: rng.standard_normal((Nt, Nlevel, n_face, fs, fs)).astype(np.float32)
+        for name in ("theta", "salt", "u", "v")
+    }
+    fields_2d = {"eta": rng.standard_normal((Nt, n_face, fs, fs)).astype(np.float32)}
+    xc = rng.standard_normal((n_face, fs, fs)).astype(np.float64)
+    yc = rng.standard_normal((n_face, fs, fs)).astype(np.float64)
+
+    out = tmp_path / "run.zarr"
+    write_cubed_sphere_zarr_3d(
+        out,
+        time_arr=np.array([0.0, 10.0]),
+        fields_3d=fields_3d,
+        fields_2d=fields_2d,
+        level_idx=np.array([1, 2, 3], dtype=np.int64),
+        depth_m=depth_centers()[:Nlevel],
+        xc=xc,
+        yc=yc,
+        params={"gm_background_k": 1000.0},
+        description="test",
+    )
+
+    ds = xr.open_zarr(out)
+    assert set(ds.data_vars) == {"theta", "salt", "u", "v", "eta"}
+    assert ds["theta"].dims == ("time", "level", "face", "y", "x")
+    assert ds["theta"].shape == (Nt, Nlevel, n_face, fs, fs)
+    assert ds["eta"].dims == ("time", "face", "y", "x")
+    np.testing.assert_array_equal(ds["level"].values, np.array([1, 2, 3]))
+    assert ds["depth"].dims == ("level",)
+    assert ds["depth"].values[0] == pytest.approx(0.5 * GLOBAL_OCEAN_DEL_R[0])
+    np.testing.assert_array_equal(ds["theta"].values, fields_3d["theta"])
+    np.testing.assert_array_equal(ds["eta"].values, fields_2d["eta"])

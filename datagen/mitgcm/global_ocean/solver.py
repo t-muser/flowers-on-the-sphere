@@ -89,6 +89,12 @@ class GlobalOceanRunConfig:
     tracer_level: int = 1
     velocity_level: int = 2
 
+    # Optional 3-D output mode. When ``levels`` is a tuple of 1-indexed depth
+    # levels, the writer emits per-variable arrays with a ``level`` axis
+    # (theta/salt/u/v at each level + 2-D eta) instead of the legacy
+    # single-level stack. ``tracer_level`` / ``velocity_level`` are ignored.
+    levels: tuple[int, ...] | None = None
+
     # Physical sweep hooks. Defaults are the tutorial values.
     gm_background_k: float = 1.0e3
     visc_ah: float = 5.0e5
@@ -563,6 +569,13 @@ def _level_index(level: int, Nr: int, name: str) -> int:
     return level - 1
 
 
+def depth_centers(del_r: tuple[float, ...] = GLOBAL_OCEAN_DEL_R) -> np.ndarray:
+    """Cell-center depth [m] for each vertical level (positive downward)."""
+    thicknesses = np.asarray(del_r, dtype=np.float64)
+    upper_edges = np.concatenate([[0.0], np.cumsum(thicknesses[:-1])])
+    return upper_edges + 0.5 * thicknesses
+
+
 def extract_global_ocean_fields(
         data: Mapping[str, np.ndarray],
         cfg: GlobalOceanRunConfig,
@@ -591,6 +604,41 @@ def extract_global_ocean_fields(
         ],
         time_arr,
     )
+
+
+def extract_global_ocean_fields_3d(
+        data: Mapping[str, np.ndarray],
+        cfg: GlobalOceanRunConfig,
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], np.ndarray, np.ndarray]:
+    """Extract per-variable 3-D and 2-D arrays for multi-level output.
+
+    Returns:
+        fields_3d:  ``{'theta', 'salt', 'u', 'v'}`` each shaped
+                    ``(time, level, face, y, x)`` float32.
+        fields_2d:  ``{'eta'}`` shaped ``(time, face, y, x)`` float32.
+        level_idx:  Selected 1-indexed model levels, shape ``(Nlevel,)``.
+        time_arr:   Time coordinate in seconds since collection start.
+    """
+    if not cfg.levels:
+        raise ValueError("extract_global_ocean_fields_3d requires cfg.levels to be set")
+    k_indices = np.array(
+        [_level_index(int(lvl), cfg.Nr, "levels") for lvl in cfg.levels],
+        dtype=int,
+    )
+    level_idx = np.array(cfg.levels, dtype=np.int64)
+
+    fields_3d = {
+        "theta": data["THETA"][:, k_indices].astype(np.float32),
+        "salt": data["SALT"][:, k_indices].astype(np.float32),
+        "u": data["UVEL"][:, k_indices].astype(np.float32),
+        "v": data["VVEL"][:, k_indices].astype(np.float32),
+    }
+    fields_2d = {"eta": data["ETAN"].astype(np.float32)}
+
+    time_arr = np.asarray(data["time"], dtype=np.float64)
+    time_arr = time_arr - time_arr[0]
+
+    return fields_3d, fields_2d, level_idx, time_arr
 
 
 def write_cubed_sphere_zarr(
@@ -635,15 +683,120 @@ def write_cubed_sphere_zarr(
     ds.to_zarr(out_path, mode="w")
 
 
+def write_cubed_sphere_zarr_3d(
+        out_path: Path,
+        *,
+        time_arr: np.ndarray,
+        fields_3d: Mapping[str, np.ndarray],
+        fields_2d: Mapping[str, np.ndarray],
+        level_idx: np.ndarray,
+        depth_m: np.ndarray,
+        xc: np.ndarray,
+        yc: np.ndarray,
+        params: Mapping[str, Any] | None = None,
+        description: str = "",
+) -> None:
+    """Write a multi-level cubed-sphere dataset to ``out_path`` (Zarr store).
+
+    Schema:
+      - ``<name>(time, level, face, y, x)`` for each entry in ``fields_3d``.
+      - ``<name>(time, face, y, x)`` for each entry in ``fields_2d``.
+      - Coords: ``time``, ``level`` (1-indexed model level), ``depth`` (m,
+        cell-center, on the ``level`` axis), ``xc`` / ``yc`` ``(face, y, x)``.
+    """
+    if not fields_3d and not fields_2d:
+        raise ValueError("write_cubed_sphere_zarr_3d: no fields supplied")
+
+    n_face, ny, nx = xc.shape
+    Nlevel = int(level_idx.size)
+    for name, arr in fields_3d.items():
+        if arr.shape[1:] != (Nlevel, n_face, ny, nx):
+            raise ValueError(
+                f"fields_3d[{name!r}] has shape {arr.shape}, "
+                f"expected (*, {Nlevel}, {n_face}, {ny}, {nx})."
+            )
+    for name, arr in fields_2d.items():
+        if arr.shape[1:] != (n_face, ny, nx):
+            raise ValueError(
+                f"fields_2d[{name!r}] has shape {arr.shape}, "
+                f"expected (*, {n_face}, {ny}, {nx})."
+            )
+
+    data_vars: dict = {}
+    for name, arr in fields_3d.items():
+        data_vars[name] = (("time", "level", "face", "y", "x"), arr.astype(np.float32))
+    for name, arr in fields_2d.items():
+        data_vars[name] = (("time", "face", "y", "x"), arr.astype(np.float32))
+
+    ds = xr.Dataset(
+        data_vars=data_vars,
+        coords={
+            "time": ("time", np.asarray(time_arr, dtype=np.float64)),
+            "level": ("level", level_idx.astype(np.int64)),
+            "depth": ("level", depth_m.astype(np.float64)),
+            "xc": (("face", "y", "x"), np.asarray(xc, dtype=np.float64)),
+            "yc": (("face", "y", "x"), np.asarray(yc, dtype=np.float64)),
+        },
+        attrs={
+            "description": description,
+            "grid": f"cubed-sphere cs32 (6 faces, {ny}x{nx} each)",
+            "level_units": "1-indexed model level (positive downward)",
+            "depth_units": "meters",
+            "params": dict(params or {}),
+        },
+    )
+
+    encoding = {
+        name: {"chunks": (1, Nlevel, n_face, ny, nx)} for name in fields_3d
+    }
+    encoding.update({
+        name: {"chunks": (1, n_face, ny, nx)} for name in fields_2d
+    })
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    ds.to_zarr(out_path, mode="w", encoding=encoding)
+
+
 def write_global_ocean_zarr(
         data: Mapping[str, np.ndarray],
         out_path: Path,
         cfg: GlobalOceanRunConfig,
         params: Mapping[str, Any] | None = None,
 ) -> None:
-    """Write global-ocean output to a native cubed-sphere Zarr store."""
-    field_arrays, field_names, time_arr = extract_global_ocean_fields(data, cfg)
+    """Write global-ocean output to a native cubed-sphere Zarr store.
+
+    Branches on ``cfg.levels``: when set, emits a per-variable 3-D Zarr
+    (theta/salt/u/v at each requested level + 2-D eta); otherwise emits the
+    legacy single-level stacked Zarr.
+    """
     grid = load_grid_cs32(cfg.grid_dir)
+
+    if cfg.levels:
+        fields_3d, fields_2d, level_idx, time_arr = extract_global_ocean_fields_3d(
+            data, cfg
+        )
+        all_depth = depth_centers()
+        depth_m = all_depth[level_idx - 1]
+        levels_label = ", ".join(str(int(lvl)) for lvl in level_idx)
+        write_cubed_sphere_zarr_3d(
+            out_path,
+            time_arr=time_arr,
+            fields_3d=fields_3d,
+            fields_2d=fields_2d,
+            level_idx=level_idx,
+            depth_m=depth_m,
+            xc=grid["xc"],
+            yc=grid["yc"],
+            params=params,
+            description=(
+                "MITgcm global ocean cubed-sphere (cs32x15) tutorial; "
+                f"theta/salt/u/v at levels [{levels_label}] + sea surface height."
+            ),
+        )
+        return
+
+    field_arrays, field_names, time_arr = extract_global_ocean_fields(data, cfg)
     write_cubed_sphere_zarr(
         out_path,
         time_arr=time_arr,

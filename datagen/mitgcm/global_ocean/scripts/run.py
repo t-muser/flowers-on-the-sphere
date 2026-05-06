@@ -19,6 +19,15 @@ from pathlib import Path
 from datagen.mitgcm.global_ocean import GlobalOceanRunConfig, run_simulation
 
 
+def _parse_levels(text: str | None, Nr: int) -> tuple[int, ...] | None:
+    """Parse ``--levels``: ``all`` → 1..Nr, else a comma-separated 1-indexed list."""
+    if text is None:
+        return None
+    if text.strip().lower() == "all":
+        return tuple(range(1, Nr + 1))
+    return tuple(int(s) for s in text.split(",") if s.strip())
+
+
 def _setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -40,6 +49,16 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument("--delta-t-freesurf", type=float, default=None)
     ap.add_argument("--tracer-level", type=int, default=None)
     ap.add_argument("--velocity-level", type=int, default=None)
+    ap.add_argument(
+        "--levels",
+        type=str,
+        default=None,
+        help=(
+            "Enable 3-D output: comma-separated 1-indexed depth levels, "
+            "or 'all' for every level. Mutually exclusive with --tracer-level "
+            "/ --velocity-level (which apply to the legacy 2-D mode)."
+        ),
+    )
     ap.add_argument("--gm-background-k", type=float, default=None)
     ap.add_argument("--visc-ah", type=float, default=None)
     ap.add_argument("--diff-kr", type=float, default=None)
@@ -85,6 +104,9 @@ def main() -> int:
             overrides[key] = value
     if args.serial:
         overrides["mpirun_cmd"] = ()
+    levels = _parse_levels(args.levels, GlobalOceanRunConfig.Nr)
+    if levels is not None:
+        overrides["levels"] = levels
 
     failed_marker = args.out_dir.parent / (args.out_dir.name + ".FAILED")
     if failed_marker.exists():

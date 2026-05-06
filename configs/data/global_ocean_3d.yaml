@@ -1,0 +1,54 @@
+# MITgcm global-ocean cs32x15 3-D ensemble (243 runs, cubed-sphere on disk).
+# Same parameter sweep as global_ocean.yaml (3^5 = 243; gm_background_k ×
+# visc_ah × diff_kr × tau_theta_relax_days × tau_salt_relax_days), but each
+# run.zarr keeps all 15 vertical levels as per-variable arrays:
+#
+#   theta, salt, u, v   (time, level, face, y, x)
+#   eta                 (time, face, y, x)
+#
+# The GlobalOcean3DDataModule regrids cs32 → (64, 128) lat/lon, rotates
+# (u, v) to geographic east/north at every level, and squashes the
+# selected levels into the channel axis so models still see (T, C, H, W).
+# With the default 6-level subset the dynamic channel layout is:
+#
+#   theta_{k01,k03,k05,k07,k10,k13} | salt_{k01,k03,k05,k07,k10,k13} |
+#   u_{...}                         | v_{...}                        | eta
+#
+# i.e. 4*6 + 1 = 25 dynamic channels. Add the depth + sin/cos(doy)
+# conditioning channels for 28 inputs / 25 outputs.
+data:
+  _target_: fots.data.global_ocean_3d.GlobalOcean3DDataModule
+  root: ${oc.env:DATA_ROOT}/global-ocean-3D
+  dataset_name: global_ocean_3d
+  time_steps_per_run: 1189
+  # Headline 6-level log-spaced subset:
+  #   k=1   (25 m)    SST/SSS, mixed layer, eddy KE peak
+  #   k=3   (170 m)   mixed-layer base / upper thermocline
+  #   k=5   (455 m)   subtropical mode water
+  #   k=7   (935 m)   AAIW core / intermediate water
+  #   k=10  (2030 m)  NADW upper
+  #   k=13  (3575 m)  bottom-water signal
+  # Each level captures ~half the remaining vertical variance; no
+  # near-redundant entries, no near-empty ones. Override on the CLI:
+  #   data.levels=null               -> all 15 levels (61 dyn channels)
+  #   data.levels=[1,4,8,13]         -> 4 levels (17 dyn channels)
+  #   data.levels=[1,2,3,5,7,9,11,14]-> 8 levels (33 dyn channels)
+  # dim_in / dim_out auto-recompute when these are null; pin them only if
+  # you want to lock the model architecture against config drift.
+  levels: [1, 3, 5, 7, 10, 13]
+  # 4 vars × 6 levels = 24 + 1 (eta) = 25 dyn + 1 depth + 2 doy = 28.
+  dim_in: 28
+  dim_out: 25
+  spatial_resolution: [64, 128]
+  grid: equiangular
+  batch_size: 2
+  n_steps_input: 4
+  n_steps_output: 1
+  num_workers: 8
+  regrid_method: idw
+  regrid_k: 4
+  # Pre-fill MITgcm's 0.0 land cells with the per-level wet-cell mean
+  # before the cs→lat/lon IDW regrid so the kernel doesn't bleed zero
+  # into wet cells across continental margins. Strongly recommended;
+  # without this, deep-level salt z-scores can blow up by ~100×.
+  impute_land: true

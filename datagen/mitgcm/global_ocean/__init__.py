@@ -3,7 +3,9 @@
 from datagen.mitgcm.global_ocean.solver import (
     GLOBAL_OCEAN_DEL_R,
     GlobalOceanRunConfig,
+    depth_centers,
     extract_global_ocean_fields,
+    extract_global_ocean_fields_3d,
     load_grid_cs32,
     read_global_ocean_output,
     render_data,
@@ -13,13 +15,16 @@ from datagen.mitgcm.global_ocean.solver import (
     run_simulation,
     stage_global_ocean_run,
     write_cubed_sphere_zarr,
+    write_cubed_sphere_zarr_3d,
     write_global_ocean_zarr,
 )
 
 __all__ = [
     "GLOBAL_OCEAN_DEL_R",
     "GlobalOceanRunConfig",
+    "depth_centers",
     "extract_global_ocean_fields",
+    "extract_global_ocean_fields_3d",
     "load_grid_cs32",
     "read_global_ocean_output",
     "render_data",
@@ -29,5 +34,6 @@ __all__ = [
     "run_simulation",
     "stage_global_ocean_run",
     "write_cubed_sphere_zarr",
+    "write_cubed_sphere_zarr_3d",
     "write_global_ocean_zarr",
 ]

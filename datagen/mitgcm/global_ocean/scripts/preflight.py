@@ -32,6 +32,7 @@ from datagen.mitgcm.global_ocean.scripts.generate_sweep import (
     FIXED_PARAMS,
     PARAM_GRID,
 )
+from datagen.mitgcm.global_ocean.scripts.run import _parse_levels
 
 _PREFLIGHT_N_TIMESTEPS: int = 30
 _PREFLIGHT_SNAPSHOT_INTERVAL_DAYS: float = 10.0
@@ -128,6 +129,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             overrides[dest] = val
     if args.serial:
         overrides["mpirun_cmd"] = ()
+    levels = _parse_levels(args.levels, GlobalOceanRunConfig.Nr)
+    if levels is not None:
+        overrides["levels"] = levels
 
     try:
         run_simulation(params, out_dir, **overrides)
@@ -181,6 +185,15 @@ def _parse_args() -> argparse.Namespace:
     ap_run.add_argument("--delta-t-freesurf", type=float, default=None)
     ap_run.add_argument("--tracer-level", type=int, default=None)
     ap_run.add_argument("--velocity-level", type=int, default=None)
+    ap_run.add_argument(
+        "--levels",
+        type=str,
+        default=None,
+        help=(
+            "Enable 3-D output: comma-separated 1-indexed depth levels, "
+            "or 'all' for every level."
+        ),
+    )
     ap_run.add_argument("--timeout-s", type=float, default=None)
     ap_run.add_argument(
         "--serial",

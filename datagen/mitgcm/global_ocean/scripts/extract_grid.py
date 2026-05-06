@@ -66,6 +66,13 @@ def main() -> None:
     # may be dry due to free-surface partial cells but a deeper level is wet).
     column_has_water = (hfac_c > 0).any(axis=0)
 
+    # Per-level masks (Nr, face, y, x) for the 3-D variant. Same convention
+    # as the 2-D masks: ``True`` ⇔ ocean cell (hFac > 0). For staggered grids
+    # (W/S) we mask the cell only when *both* face-edges are wet, matching
+    # the 2-D ``mask_k2`` convention.
+    mask_c_3d = (hfac_c > 0)
+    mask_w_3d = (hfac_w > 0) & (hfac_s > 0)
+
     ds = xr.Dataset(
         data_vars={
             "depth":     (("face", "y", "x"), depth.astype(np.float32)),
@@ -75,10 +82,14 @@ def main() -> None:
             "mask_k1":   (("face", "y", "x"), (hfac_c[k_t] > 0)),
             "mask_k2":   (("face", "y", "x"), (hfac_w[k_v] > 0) & (hfac_s[k_v] > 0)),
             "mask_eta":  (("face", "y", "x"), column_has_water),
+            "mask_c_3d": (("level", "face", "y", "x"), mask_c_3d),
+            "mask_w_3d": (("level", "face", "y", "x"), mask_w_3d),
+            "hfac_c":    (("level", "face", "y", "x"), hfac_c.astype(np.float32)),
             "angle_cs":  (("face", "y", "x"), angle_cs.astype(np.float32)),
             "angle_sn":  (("face", "y", "x"), angle_sn.astype(np.float32)),
         },
         coords={
+            "level": ("level", np.arange(1, hfac_c.shape[0] + 1, dtype=np.int64)),
             "xc": (("face", "y", "x"), xc.astype(np.float32)),
             "yc": (("face", "y", "x"), yc.astype(np.float32)),
         },

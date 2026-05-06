@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 
@@ -64,6 +65,10 @@ def main() -> None:
                     help="Drop the first N snapshots and rebase 'time' to "
                          "start at 0. Use to bake spinup discard into the "
                          "split (default: 0 = no trim).")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="Number of parallel workers for the move+trim step "
+                         "(default: 1, sequential). Each move is independent, "
+                         "so this scales near-linearly until disk-bound.")
     args = ap.parse_args()
 
     processed_dir = args.root / args.src_dir
@@ -80,6 +85,7 @@ def main() -> None:
     if args.trim_first:
         print(f"  trim_first: {args.trim_first} snapshots dropped, time rebased to 0")
 
+    jobs: list[tuple[str, Path, Path]] = []
     for split_name in ("train", "val", "test"):
         ids = splits_data[split_name]
         split_dir = args.root / split_name
@@ -90,8 +96,39 @@ def main() -> None:
             else:
                 src = processed_dir / f"run_{run_id:04d}.zarr"
             dst = split_dir / f"run_{run_id:04d}.zarr"
+            # Skip if the destination is already a complete zarr store
+            # (zarr.json for v3; .zgroup for v2). A partial source dir from
+            # an interrupted previous move can leave src.is_dir() == True
+            # while dst is the canonical, valid copy — so check dst, not src.
+            if dst.is_dir() and (
+                (dst / "zarr.json").exists() or (dst / ".zgroup").exists()
+            ):
+                continue
+            jobs.append((split_name, src, dst))
+
+    print(f"Total moves to perform: {len(jobs)} (workers={args.workers})")
+    if args.workers <= 1:
+        for split_name, src, dst in jobs:
             _move_with_optional_trim(src, dst, args.trim_first)
-        print(f"  {split_name}: {len(ids)} runs → {split_dir}")
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+            futures = {
+                pool.submit(_move_with_optional_trim, src, dst, args.trim_first):
+                    (split_name, src, dst)
+                for split_name, src, dst in jobs
+            }
+            done = 0
+            for fut in as_completed(futures):
+                split_name, src, dst = futures[fut]
+                fut.result()  # surface exceptions
+                done += 1
+                if done % 10 == 0 or done == len(futures):
+                    print(f"  moved {done}/{len(futures)}")
+
+    for split_name in ("train", "val", "test"):
+        n = len(splits_data[split_name])
+        split_dir = args.root / split_name
+        print(f"  {split_name}: {n} runs → {split_dir}")
 
     if args.nested:
         # Per-run dirs likely still hold solver artifacts (MDS files, STDOUTs).
