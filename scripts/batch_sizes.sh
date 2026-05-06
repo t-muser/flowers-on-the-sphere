@@ -16,6 +16,8 @@ declare -gA FOTS_DATA_RESOLUTION=(
     [shock_caps]=256x512
     [mickelin]=128x256
     [swe_th]=64x128
+    [global_ocean]=64x128
+    [held_suarez]=64x128
 )
 
 declare -gA FOTS_BATCH_SIZE=(
@@ -35,10 +37,21 @@ declare -gA FOTS_BATCH_SIZE=(
     [sfno:128x256]=98
     [flower:128x256]=76
     [zinnia:128x256]=38
+    [zinnia_v5:128x256]=42
     [dahlia:128x256]=38
     [dandelion:128x256]=43
     [local_r_transformer:128x256]=27
     [local_s2_transformer:128x256]=13
+
+    # 64x128 (estimated — ≈2.7-3.3x the 128x256 numbers, conservative vs.
+    # the 3.5x linear-pixel scaling seen 256x512 -> 128x256). Probe once a
+    # job lands and bump up if peak memory leaves headroom.
+    [fno:64x128]=256
+    [sfno:64x128]=256
+    [flower:64x128]=192
+    [zinnia_v5:64x128]=128
+    [local_r_transformer:64x128]=80
+    [local_s2_transformer:64x128]=36
 )
 
 fots_batch_size() {

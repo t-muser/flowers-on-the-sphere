@@ -277,7 +277,7 @@ class ZarrDataModule(AbstractDataModule):
         )
 
         def _make(split: str, full_trajectory: bool = False) -> _ZarrWindowDataset:
-            return _ZarrWindowDataset(
+            return self._make_window_dataset(
                 split_dir=self.root / split,
                 run_ids=split_run_ids[split],
                 n_steps_input=self.n_steps_input,
@@ -294,6 +294,12 @@ class ZarrDataModule(AbstractDataModule):
         self.test_dataset = _make("test")
         self.rollout_val_dataset = _make("val", full_trajectory=True)
         self.rollout_test_dataset = _make("test", full_trajectory=True)
+
+    def _make_window_dataset(self, **kwargs) -> _ZarrWindowDataset:
+        # Extension hook for datasets whose on-disk schema differs from
+        # the canonical `fields(time, field, lat, lon)` layout — override
+        # to return a custom _ZarrWindowDataset subclass.
+        return _ZarrWindowDataset(**kwargs)
 
     def denormalize_fn(self, x: torch.Tensor) -> torch.Tensor:
         """Map a normalized (B, C, H, W) tensor back to physical units.

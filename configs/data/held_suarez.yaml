@@ -1,0 +1,49 @@
+# MITgcm Held-Suarez 3-D ensemble (72 runs, 64x128 equiangular pole-excluding).
+# Per run: 365 daily snapshots. Variables on disk are per-quantity:
+#   u, v, T : (time, level, lat, lon)  with level in {50, 100, 250, 500,
+#                                       700, 850, 925, 1000} hPa
+#   ps      : (time, lat, lon)
+# Flattened to 25 channels: u_50..u_1000, v_50..v_1000, T_50..T_1000, ps.
+# Lat/lon are equispaced cell centres (no remapping; matches MITgcm's
+# spherical-polar dynamical grid and the rest of the repo).
+data:
+  _target_: fots.data.held_suarez.HeldSuarezDataModule
+  # v2 is the converted store; the source v3 tree at .../held-suarez-3d is
+  # unreadable by the container's zarr 2.x. See scripts/convert_global_ocean_zarr_v3_to_v2.py.
+  root: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/held-suarez-3d-v2
+  dataset_name: held_suarez
+  time_steps_per_run: 365
+  dim_in: 25
+  dim_out: 25
+  spatial_resolution: [64, 128]
+  grid: equiangular
+  field_names:
+    - u_50hpa
+    - u_100hpa
+    - u_250hpa
+    - u_500hpa
+    - u_700hpa
+    - u_850hpa
+    - u_925hpa
+    - u_1000hpa
+    - v_50hpa
+    - v_100hpa
+    - v_250hpa
+    - v_500hpa
+    - v_700hpa
+    - v_850hpa
+    - v_925hpa
+    - v_1000hpa
+    - T_50hpa
+    - T_100hpa
+    - T_250hpa
+    - T_500hpa
+    - T_700hpa
+    - T_850hpa
+    - T_925hpa
+    - T_1000hpa
+    - ps
+  batch_size: 4
+  n_steps_input: 4
+  n_steps_output: 1
+  num_workers: 8
