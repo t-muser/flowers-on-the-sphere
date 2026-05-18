@@ -39,7 +39,12 @@ from dataclasses import fields
 from pathlib import Path
 
 from datagen.mitgcm.held_suarez.scripts.generate_sweep import FIXED_PARAMS, PARAM_GRID
-from datagen.mitgcm.held_suarez.solver import RunConfig, run_simulation
+from datagen.mitgcm.held_suarez.solver import (
+    RunConfig,
+    default_executable,
+    default_input_dir,
+    run_simulation,
+)
 
 # Preflight defaults — short enough to verify solver health without committing
 # to a full 565-day production run.
@@ -132,12 +137,26 @@ def cmd_run(args: argparse.Namespace) -> int:
     # silently dropping the override.
     rc_field_names = {f.name for f in fields(RunConfig)}
     overrides: dict = {}
-    for dest in ("n_mpi", "spinup_days", "data_days", "snapshot_interval_days",
-                 "pressure_hpa", "pressure_levels", "delta_t", "executable"):
+    cli_dests = (
+        "n_mpi", "spinup_days", "data_days", "snapshot_interval_days",
+        "pressure_hpa", "pressure_levels", "delta_t", "executable",
+        "Nlon", "Nlat", "Nr", "top_thickness", "input_dir",
+    )
+    for dest in cli_dests:
         assert dest in rc_field_names, f"Unknown RunConfig field: {dest!r}"
         val = getattr(args, dest, None)
         if val is not None:
             overrides[dest] = tuple(val) if dest == "pressure_levels" else val
+    if args.cleanup_run_dir:
+        overrides["cleanup_run_dir"] = True
+
+    Nlon = overrides.get("Nlon", RunConfig.Nlon)
+    Nlat = overrides.get("Nlat", RunConfig.Nlat)
+    Nr   = overrides.get("Nr",   RunConfig.Nr)
+    if "executable" not in overrides:
+        overrides["executable"] = default_executable(Nlon, Nlat, Nr)
+    if "input_dir" not in overrides:
+        overrides["input_dir"] = default_input_dir(Nlon, Nlat)
 
     try:
         run_simulation(params, out_dir, **overrides)
@@ -223,6 +242,30 @@ def _parse_args() -> argparse.Namespace:
     ap_run.add_argument(
         "--delta-t", type=float, default=None, dest="delta_t",
         help="Timestep [s] (overrides RunConfig default).",
+    )
+    ap_run.add_argument(
+        "--nlon", type=int, default=None, dest="Nlon",
+        help="Number of longitude points (must match the compiled SIZE.h).",
+    )
+    ap_run.add_argument(
+        "--nlat", type=int, default=None, dest="Nlat",
+        help="Number of latitude points (must match the compiled SIZE.h).",
+    )
+    ap_run.add_argument(
+        "--nr", type=int, default=None, dest="Nr",
+        help="Number of vertical levels (must match the compiled SIZE.h).",
+    )
+    ap_run.add_argument(
+        "--top-thickness", type=float, default=None, dest="top_thickness",
+        help="Thickness of the top model layer [Pa] (default: 15000).",
+    )
+    ap_run.add_argument(
+        "--cleanup-run-dir", action="store_true", dest="cleanup_run_dir",
+        help="Delete the MITgcm working dir after a successful Zarr write.",
+    )
+    ap_run.add_argument(
+        "--input-dir", type=Path, default=None, dest="input_dir",
+        help="Static-input directory (auto-resolved from Nlon/Nlat if absent).",
     )
     ap_run.set_defaults(func=cmd_run)
 

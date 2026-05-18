@@ -35,9 +35,14 @@ def _fmt_real(v: float) -> str:
     return f"{v:.8g}"
 
 
-def _pressure_centers(Nr: int, p0: float = P0) -> np.ndarray:
+def _pressure_centers(
+    Nr: int,
+    p0: float = P0,
+    *,
+    top_thickness: float = 15000.0,
+) -> np.ndarray:
     """Pressure at cell centres [Pa] ordered as MITgCM k=1 surface to top."""
-    delR = pressure_thicknesses(Nr, p0)
+    delR = pressure_thicknesses(Nr, p0, top_thickness=top_thickness)
     upper_edges = p0 - np.concatenate([[0.0], np.cumsum(delR[:-1])])
     return upper_edges - 0.5 * delR
 
@@ -56,6 +61,7 @@ def write_data(
     has_ic_file: bool,
     T0: float,
     delta_theta_z: float,
+    top_thickness: float = 15000.0,
 ) -> None:
     """Write the main ``data`` namelist.
 
@@ -76,10 +82,10 @@ def write_data(
     """
     del_lon = 360.0 / Nlon  # degrees
     del_lat = 180.0 / Nlat  # degrees
-    del_r = pressure_thicknesses(Nr)
+    del_r = pressure_thicknesses(Nr, top_thickness=top_thickness)
     del_r_str = ",\n  ".join(_fmt_real(v) for v in del_r)
 
-    p_centers = _pressure_centers(Nr)
+    p_centers = _pressure_centers(Nr, top_thickness=top_thickness)
     t_ref = reference_temperature_profile(p_centers, T0=T0, delta_theta_z=delta_theta_z)
     t_ref_str = ",\n  ".join(_fmt_real(t) for t in t_ref)
 
@@ -218,11 +224,12 @@ def write_data_diagnostics(
     *,
     snapshot_interval_s: float,
     Nr: int = 20,
+    level_indices: list[int] | tuple[int, ...] | None = None,
 ) -> None:
     """Write ``data.diagnostics`` — output field list and frequency.
 
     Outputs instantaneous snapshots (positive frequency) of:
-      - UVEL  : zonal velocity [m/s]       — 3-D (Nr levels)
+      - UVEL  : zonal velocity [m/s]       — 3-D (selected levels)
       - VVEL  : meridional velocity [m/s]  — 3-D
       - THETA : potential temperature [K]  — 3-D
       - ETAN  : surface pressure deviation [Pa] — 2-D (ETAN = ps − p0)
@@ -232,14 +239,36 @@ def write_data_diagnostics(
 
     Args:
         snapshot_interval_s: Output cadence in seconds (positive = snapshot).
+        Nr:                  Number of model levels (used as the default when
+                             ``level_indices`` is None).
+        level_indices:       Optional explicit list of 1-indexed model k levels
+                             to write. When provided, only these levels are
+                             output by MITgcm — typically the ones nearest the
+                             requested ``pressure_levels`` for the run. This
+                             can cut diagnostic IO dramatically at high
+                             resolution. ``None`` means "all ``Nr`` levels".
     """
-    levels = ", ".join(str(k) for k in range(1, Nr + 1))
+    if level_indices is None:
+        k_list = list(range(1, Nr + 1))
+    else:
+        # Dedup and sort so MITgcm sees a deterministic order; values are
+        # 1-indexed model k.
+        k_list = sorted(set(int(k) for k in level_indices))
+        if not k_list:
+            raise ValueError("level_indices must be non-empty when provided")
+        if k_list[0] < 1 or k_list[-1] > Nr:
+            raise ValueError(
+                f"level_indices out of range [1, {Nr}]: {k_list}"
+            )
+
+    n_levels = len(k_list)
+    levels = ", ".join(str(k) for k in k_list)
     content = f"""\
  &DIAGNOSTICS_LIST
   dumpAtLast    = .TRUE.,
   diag_mnc      = .FALSE.,
   fields(1:3,1) = 'UVEL    ','VVEL    ','THETA   ',
-  levels(1:{Nr},1) = {levels},
+  levels(1:{n_levels},1) = {levels},
   fileName(1)   = 'atm_state',
   frequency(1)  = {_fmt_real(snapshot_interval_s)},
   timePhase(1)  = 0.,
@@ -299,6 +328,8 @@ def write_all_namelists(
     delta_theta_z: float,
     sigmab: float,
     T0: float,
+    top_thickness: float = 15000.0,
+    level_indices: list[int] | tuple[int, ...] | None = None,
 ) -> None:
     """Write all namelist files for one MITgcm run phase into ``run_dir``."""
     run_dir = Path(run_dir)
@@ -313,6 +344,7 @@ def write_all_namelists(
         has_ic_file=has_ic_file,
         T0=T0,
         delta_theta_z=delta_theta_z,
+        top_thickness=top_thickness,
     )
     write_data_pkg(run_dir / "data.pkg", use_diagnostics=has_diagnostics)
     write_eedata(run_dir / "eedata")
@@ -329,5 +361,6 @@ def write_all_namelists(
             run_dir / "data.diagnostics",
             snapshot_interval_s=snapshot_interval_s,
             Nr=Nr,
+            level_indices=level_indices,
         )
     write_data_shap(run_dir / "data.shap")

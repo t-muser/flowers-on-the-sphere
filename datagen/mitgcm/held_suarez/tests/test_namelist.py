@@ -211,6 +211,30 @@ class TestWriteData:
         assert len(values) == Nr
         assert sum(values) == pytest.approx(1.0e5)
 
+    def test_top_thickness_changes_top_layer(self, tmp_path):
+        """The last (top) delR value should equal the requested top_thickness."""
+        Nr = 30
+        p = tmp_path / "data"
+        write_data(p, Nlon=128, Nlat=64, Nr=Nr, delta_t=600.0,
+                   n_iter0=0, n_timesteps=1000, write_pickup=False,
+                   pchkpt_freq=0.0, has_ic_file=False,
+                   T0=HS_T0, delta_theta_z=10.0,
+                   top_thickness=7500.0)
+        content = p.read_text()
+        match = re.search(r"delR\s*=\s*(.*?),\n\s*ygOrigin", content, re.DOTALL)
+        assert match is not None
+        values = [
+            float(v.strip().rstrip(","))
+            for v in re.split(r"[,\n]+", match.group(1))
+            if v.strip().rstrip(",")
+        ]
+        assert len(values) == Nr
+        # The top layer is written last (MITgcm k=Nr).
+        assert values[-1] == pytest.approx(7500.0)
+        # Lower layers should be uniform and finer than the default 150 hPa.
+        assert all(v < 7500.0 for v in values[:-1])
+        assert sum(values) == pytest.approx(1.0e5)
+
 
 # ─── write_data_hs_forc ─────────────────────────────────────────────────────
 
@@ -329,6 +353,42 @@ class TestWriteDataDiagnostics:
         p = tmp_path / "data.diagnostics"
         write_data_diagnostics(p, snapshot_interval_s=86400.0, Nr=4)
         assert "levels(1:4,1) = 1, 2, 3, 4" in p.read_text()
+
+    def test_level_indices_restricts_output(self, tmp_path):
+        """Explicit level_indices should be written verbatim (sorted, dedup)."""
+        p = tmp_path / "data.diagnostics"
+        write_data_diagnostics(
+            p, snapshot_interval_s=86400.0, Nr=20,
+            level_indices=[5, 10, 18],
+        )
+        text = p.read_text()
+        assert "levels(1:3,1) = 5, 10, 18" in text
+        # Should NOT enumerate every level when restricted.
+        assert "1, 2, 3, 4, 5" not in text
+
+    def test_level_indices_sorted_and_deduped(self, tmp_path):
+        p = tmp_path / "data.diagnostics"
+        write_data_diagnostics(
+            p, snapshot_interval_s=86400.0, Nr=20,
+            level_indices=[10, 5, 10, 18, 5],
+        )
+        assert "levels(1:3,1) = 5, 10, 18" in p.read_text()
+
+    def test_level_indices_out_of_range_raises(self, tmp_path):
+        p = tmp_path / "data.diagnostics"
+        with pytest.raises(ValueError):
+            write_data_diagnostics(
+                p, snapshot_interval_s=86400.0, Nr=20,
+                level_indices=[0, 5, 21],
+            )
+
+    def test_empty_level_indices_raises(self, tmp_path):
+        p = tmp_path / "data.diagnostics"
+        with pytest.raises(ValueError):
+            write_data_diagnostics(
+                p, snapshot_interval_s=86400.0, Nr=20,
+                level_indices=[],
+            )
 
     @pytest.mark.parametrize("interval_s", [3600.0, 86400.0, 43200.0])
     def test_frequency_matches_interval(self, tmp_path, interval_s):

@@ -26,7 +26,12 @@ import traceback
 from dataclasses import fields
 from pathlib import Path
 
-from datagen.mitgcm.held_suarez.solver import RunConfig, run_simulation
+from datagen.mitgcm.held_suarez.solver import (
+    RunConfig,
+    default_executable,
+    default_input_dir,
+    run_simulation,
+)
 
 
 def _setup_logging() -> None:
@@ -85,6 +90,42 @@ def _parse_args() -> argparse.Namespace:
         "--delta-t", type=float, default=None, dest="delta_t",
         help="Timestep [s] (overrides RunConfig default).",
     )
+    ap.add_argument(
+        "--nlon", type=int, default=None, dest="Nlon",
+        help="Number of longitude points (must match the compiled SIZE.h).",
+    )
+    ap.add_argument(
+        "--nlat", type=int, default=None, dest="Nlat",
+        help="Number of latitude points (must match the compiled SIZE.h).",
+    )
+    ap.add_argument(
+        "--nr", type=int, default=None, dest="Nr",
+        help="Number of vertical levels (must match the compiled SIZE.h).",
+    )
+    ap.add_argument(
+        "--top-thickness", type=float, default=None, dest="top_thickness",
+        help=(
+            "Thickness of the top model layer [Pa] (default: 15000 = 150 hPa). "
+            "Set to 7500 for the high-resolution 256×128×30 build so that "
+            "50 hPa and 100 hPa resolve to distinct levels."
+        ),
+    )
+    ap.add_argument(
+        "--cleanup-run-dir", action="store_true", dest="cleanup_run_dir",
+        help=(
+            "Delete the MITgcm working dir after a successful Zarr write. "
+            "Recommended for production sweeps at high resolution where the "
+            "per-run working dir would otherwise dominate cluster disk usage."
+        ),
+    )
+    ap.add_argument(
+        "--input-dir", type=Path, default=None, dest="input_dir",
+        help=(
+            "Static-input directory to symlink into each run dir. Defaults "
+            "to input_<Nlon>x<Nlat>/ next to the build dir (input/ for the "
+            "legacy 128×64 layout)."
+        ),
+    )
     return ap.parse_args()
 
 
@@ -108,12 +149,28 @@ def main() -> int:
     # silently dropping the override.
     rc_field_names = {f.name for f in fields(RunConfig)}
     overrides: dict = {}
-    for dest in ("n_mpi", "spinup_days", "data_days", "snapshot_interval_days",
-                 "pressure_hpa", "pressure_levels", "delta_t", "executable"):
+    cli_dests = (
+        "n_mpi", "spinup_days", "data_days", "snapshot_interval_days",
+        "pressure_hpa", "pressure_levels", "delta_t", "executable",
+        "Nlon", "Nlat", "Nr", "top_thickness", "input_dir",
+    )
+    for dest in cli_dests:
         assert dest in rc_field_names, f"Unknown RunConfig field: {dest!r}"
         val = getattr(args, dest, None)
         if val is not None:
             overrides[dest] = tuple(val) if dest == "pressure_levels" else val
+    if args.cleanup_run_dir:
+        overrides["cleanup_run_dir"] = True
+
+    # Resolve resolution-dependent defaults so a user passing --nlon/--nlat/
+    # --nr without --executable still points at the right build dir.
+    Nlon = overrides.get("Nlon", RunConfig.Nlon)
+    Nlat = overrides.get("Nlat", RunConfig.Nlat)
+    Nr   = overrides.get("Nr",   RunConfig.Nr)
+    if "executable" not in overrides:
+        overrides["executable"] = default_executable(Nlon, Nlat, Nr)
+    if "input_dir" not in overrides:
+        overrides["input_dir"] = default_input_dir(Nlon, Nlat)
 
     try:
         run_simulation(params, out_dir, **overrides)

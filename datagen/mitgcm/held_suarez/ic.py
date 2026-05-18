@@ -44,18 +44,35 @@ from datagen.mitgcm.held_suarez._constants import KAPPA, P0
 from datagen.mitgcm.held_suarez._physics import equilibrium_temperature
 
 
-def pressure_thicknesses(Nr: int, p0: float = P0) -> np.ndarray:
-    """MITgCM pressure-layer thicknesses [Pa], surface to top."""
+def pressure_thicknesses(
+    Nr: int,
+    p0: float = P0,
+    *,
+    top_thickness: float = 15000.0,
+) -> np.ndarray:
+    """MITgCM pressure-layer thicknesses [Pa], surface to top.
+
+    The vertical grid is uniform below the top layer, plus one "fat" top
+    layer of thickness ``top_thickness``. The default 150 hPa top matches
+    the historical 128×64×20 configuration; high-resolution builds pass a
+    smaller value (e.g. 7500 Pa = 75 hPa) so that the stratosphere is
+    resolved well enough to separate 50 hPa from 100 hPa.
+    """
     if Nr < 2:
         return np.asarray([p0], dtype=float)
-    top_thickness = min(15000.0, 0.5 * p0)
+    top_thickness = min(float(top_thickness), 0.5 * p0)
     lower = (p0 - top_thickness) / (Nr - 1)
     return np.concatenate([np.full(Nr - 1, lower), [top_thickness]])
 
 
-def _pressure_centers(Nr: int, p0: float = P0) -> np.ndarray:
+def _pressure_centers(
+    Nr: int,
+    p0: float = P0,
+    *,
+    top_thickness: float = 15000.0,
+) -> np.ndarray:
     """Pressure at level centres [Pa] ordered as MITgCM k=1 surface to top."""
-    delR = pressure_thicknesses(Nr, p0)
+    delR = pressure_thicknesses(Nr, p0, top_thickness=top_thickness)
     upper_edges = p0 - np.concatenate([[0.0], np.cumsum(delR[:-1])])
     return upper_edges - 0.5 * delR
 
@@ -93,6 +110,7 @@ def write_temperature_ic(
     smooth_sigma: float = 5.0,
     p0: float = P0,
     kappa: float = KAPPA,
+    top_thickness: float = 15000.0,
 ) -> None:
     """Write the initial potential temperature field as an MDS binary.
 
@@ -119,7 +137,7 @@ def write_temperature_ic(
         kappa:         Poisson exponent R_dry/Cp.
     """
     # Reference potential temperature field on MITgCM cell centers.
-    p_centers = _pressure_centers(Nr, p0)
+    p_centers = _pressure_centers(Nr, p0, top_thickness=top_thickness)
     del_lat = np.pi / Nlat
     lat = -0.5 * np.pi + (np.arange(Nlat) + 0.5) * del_lat
     theta_ref = equilibrium_temperature(

@@ -19,9 +19,43 @@ import pytest
 from datagen.mitgcm.held_suarez._constants import P0
 from datagen.mitgcm.held_suarez.ic import (
     _write_mds_meta,
+    pressure_thicknesses,
     write_bathymetry,
     write_temperature_ic,
 )
+
+
+# ─── pressure_thicknesses ───────────────────────────────────────────────────
+
+class TestPressureThicknesses:
+    def test_default_top_layer_150_hpa(self):
+        del_r = pressure_thicknesses(Nr=20)
+        assert del_r[-1] == pytest.approx(15000.0)
+        assert sum(del_r) == pytest.approx(P0)
+
+    def test_custom_top_thickness_high_res(self):
+        """top_thickness=7500 should give a 75 hPa top layer and finer bottom."""
+        del_r = pressure_thicknesses(Nr=30, top_thickness=7500.0)
+        assert del_r[-1] == pytest.approx(7500.0)
+        # All non-top layers should be uniform and finer than the default
+        # 4474 Pa lower thickness at Nr=20.
+        lower = del_r[:-1]
+        assert np.allclose(lower, lower[0])
+        assert lower[0] < 4474.0
+        assert sum(del_r) == pytest.approx(P0)
+
+    def test_separates_50_and_100_hpa_at_high_res(self):
+        """Top centre and second-from-top centre should bracket 75 hPa
+        cleanly so 50 hPa and 100 hPa resolve to distinct k-levels."""
+        del_r = pressure_thicknesses(Nr=30, top_thickness=7500.0)
+        upper_edges = P0 - np.concatenate([[0.0], np.cumsum(del_r[:-1])])
+        centers = upper_edges - 0.5 * del_r
+        # k = Nr-1 is the top layer; k = Nr-2 is the next one down.
+        top_centre_hpa = float(centers[-1]) / 100.0
+        next_centre_hpa = float(centers[-2]) / 100.0
+        assert top_centre_hpa < 50.0
+        assert next_centre_hpa > 50.0
+        assert next_centre_hpa < 100.0
 
 
 # ─── _write_mds_meta ────────────────────────────────────────────────────────
