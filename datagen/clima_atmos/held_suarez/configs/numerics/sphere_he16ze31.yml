@@ -1,0 +1,27 @@
+# Higher-resolution variant of sphere_he12ze31.yml. 16 × 3-degree
+# elements per cube face ≈ 1.1° equivalent grid. Use only if Phase 0.3
+# confirms the budget fits.
+config: sphere
+h_elem: 16
+nh_poly: 3
+z_elem: 31
+z_max: 60000.0
+dz_bottom: 50.0
+dt: "150secs"
+ode_algo: ARS343
+hyperdiff: Hyperdiffusion
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+device: "CUDADevice"
+netcdf_output_at_levels: false
+diagnostics:
+  - short_name: [ua, va, ta]
+    period: "6hours"
+    reduction_time: "inst"
+    pressure_coordinates: true
+  - short_name: [pfull]
+    period: "6hours"
+    reduction_time: "inst"

@@ -1,0 +1,40 @@
+# Numerics config for HS-3D dataset at he12ze31.
+#
+# Derived from ClimaAtmos's stock numerics_sphere_he6ze31.yml — same
+# vertical setup, same time-integrator, but doubled horizontal element
+# count (12 × 3-degree elements per cube face ≈ 1.5° equivalent grid).
+# dt halved from the he6 stock value to satisfy the CFL constraint that
+# scales linearly with h_elem.
+#
+# `netcdf_output_at_levels: false` causes ClimaAtmos to spin up an extra
+# pressure-coordinate NetCDF writer; per-diagnostic `pressure_coordinates:
+# true` routes ua/va/ta/pfull onto that writer. Output ends up on
+# ClimaAtmos's automatic pressure axis (RealPressureLevelsMethod) —
+# postprocess.py then cubic-spline-interpolates to the 8 ERA5 levels.
+config: sphere
+h_elem: 12
+nh_poly: 3
+z_elem: 31
+z_max: 60000.0
+dz_bottom: 50.0
+dt: "200secs"
+ode_algo: ARS343
+hyperdiff: Hyperdiffusion
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+# Force CUDA — ClimaComms.device() defaults to CPUSingleThreaded on
+# this cluster even with a GPU allocated. See memory:
+# project_clima_atmos_gpu_setup.
+device: "CUDADevice"
+netcdf_output_at_levels: false
+diagnostics:
+  - short_name: [ua, va, ta]
+    period: "6hours"
+    reduction_time: "inst"
+    pressure_coordinates: true
+  - short_name: [pfull]
+    period: "6hours"
+    reduction_time: "inst"

@@ -15,8 +15,7 @@ third_party/
 # SLURM logs
 slurm/*.out
 slurm/*.err
-datagen/**/slurm/logs/*.out
-datagen/**/slurm/logs/*.err
+datagen/**/slurm/logs/
 
 # Datagen-generated run configs and local data paths
 datagen/**/configs/
@@ -54,3 +53,28 @@ datagen/**/build_info.json
 datagen/**/inputs/
 
 **/.ipynb_checkpoints/
+
+# ClimaAtmos.jl is cloned read-only (modulo our HS forcing patch) for
+# the ClimaAtmos-driven Held-Suarez producer; do not vendor its source
+# into our git tree. To reproduce, run:
+#   git clone --depth 1 --branch v0.39.0 \
+#       https://github.com/CliMA/ClimaAtmos.jl external/ClimaAtmos.jl
+#   cd external/ClimaAtmos.jl && git apply \
+#       ../../datagen/clima_atmos/held_suarez/env/source_patch.diff
+external/
+
+# Julia depot lives under env/ so the install is self-contained, but
+# it's a multi-GB binary blob we don't want to commit. Project.toml,
+# Manifest.toml, and source_patch.diff ARE committed (whitelist below).
+datagen/clima_atmos/held_suarez/env/.julia_depot/
+!datagen/clima_atmos/held_suarez/slurm/
+!datagen/clima_atmos/held_suarez/slurm/*.sbatch
+!datagen/clima_atmos/held_suarez/env/Project.toml
+!datagen/clima_atmos/held_suarez/env/Manifest.toml
+!datagen/clima_atmos/held_suarez/env/source_patch.diff
+# Per-run / preflight corner configs are derived; manifest is the input.
+!datagen/clima_atmos/held_suarez/configs/
+!datagen/clima_atmos/held_suarez/configs/numerics/
+!datagen/clima_atmos/held_suarez/configs/numerics/*.yml
+datagen/clima_atmos/held_suarez/configs/run_*.json
+datagen/clima_atmos/held_suarez/configs/preflight/

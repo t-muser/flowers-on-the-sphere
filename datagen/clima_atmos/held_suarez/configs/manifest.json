@@ -1,0 +1,1814 @@
+{
+  "n_runs": 162,
+  "grid": {
+    "omega_factor": [
+      0.5,
+      1.0,
+      2.0
+    ],
+    "delta_T_y": [
+      40.0,
+      60.0,
+      80.0
+    ],
+    "delta_theta_z": [
+      5.0,
+      10.0,
+      20.0
+    ],
+    "seed": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "fixed": {},
+  "omega_earth_rad_s": 7.2921159e-05,
+  "runs": [
+    {
+      "run_id": 0,
+      "run_name": "run_0000",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "b1a0777c9846"
+    },
+    {
+      "run_id": 1,
+      "run_name": "run_0001",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "df8914b490db"
+    },
+    {
+      "run_id": 2,
+      "run_name": "run_0002",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "c9aabb14016f"
+    },
+    {
+      "run_id": 3,
+      "run_name": "run_0003",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "f1d873302af4"
+    },
+    {
+      "run_id": 4,
+      "run_name": "run_0004",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "4509691ac224"
+    },
+    {
+      "run_id": 5,
+      "run_name": "run_0005",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "ebed7aa78d1b"
+    },
+    {
+      "run_id": 6,
+      "run_name": "run_0006",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "1d7141673951"
+    },
+    {
+      "run_id": 7,
+      "run_name": "run_0007",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "d280abe893ca"
+    },
+    {
+      "run_id": 8,
+      "run_name": "run_0008",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "0d666be9721c"
+    },
+    {
+      "run_id": 9,
+      "run_name": "run_0009",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "74040e6d289d"
+    },
+    {
+      "run_id": 10,
+      "run_name": "run_0010",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "399c22dc1390"
+    },
+    {
+      "run_id": 11,
+      "run_name": "run_0011",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "8c850506f919"
+    },
+    {
+      "run_id": 12,
+      "run_name": "run_0012",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "f40a63a4f4e1"
+    },
+    {
+      "run_id": 13,
+      "run_name": "run_0013",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "ee1067362794"
+    },
+    {
+      "run_id": 14,
+      "run_name": "run_0014",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "3ff2601a7dba"
+    },
+    {
+      "run_id": 15,
+      "run_name": "run_0015",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "6bbe8624f0cc"
+    },
+    {
+      "run_id": 16,
+      "run_name": "run_0016",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "e5dd99000cd9"
+    },
+    {
+      "run_id": 17,
+      "run_name": "run_0017",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "9ede87a27438"
+    },
+    {
+      "run_id": 18,
+      "run_name": "run_0018",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "440a2493e598"
+    },
+    {
+      "run_id": 19,
+      "run_name": "run_0019",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "374080280a7f"
+    },
+    {
+      "run_id": 20,
+      "run_name": "run_0020",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "0b2ad1a768f8"
+    },
+    {
+      "run_id": 21,
+      "run_name": "run_0021",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "e6d54baaca34"
+    },
+    {
+      "run_id": 22,
+      "run_name": "run_0022",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "906592a47adc"
+    },
+    {
+      "run_id": 23,
+      "run_name": "run_0023",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "61716daccd59"
+    },
+    {
+      "run_id": 24,
+      "run_name": "run_0024",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "b79031cfd64a"
+    },
+    {
+      "run_id": 25,
+      "run_name": "run_0025",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "64d2230cf51a"
+    },
+    {
+      "run_id": 26,
+      "run_name": "run_0026",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "ec3ede4d15c2"
+    },
+    {
+      "run_id": 27,
+      "run_name": "run_0027",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "d2b18eca4e51"
+    },
+    {
+      "run_id": 28,
+      "run_name": "run_0028",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "135c2cb553b7"
+    },
+    {
+      "run_id": 29,
+      "run_name": "run_0029",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "898b88d58b9c"
+    },
+    {
+      "run_id": 30,
+      "run_name": "run_0030",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "0bcc4fa9242f"
+    },
+    {
+      "run_id": 31,
+      "run_name": "run_0031",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "062a1b177233"
+    },
+    {
+      "run_id": 32,
+      "run_name": "run_0032",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "5c4d7319f0bb"
+    },
+    {
+      "run_id": 33,
+      "run_name": "run_0033",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "476f46624dac"
+    },
+    {
+      "run_id": 34,
+      "run_name": "run_0034",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "2ee5e4687c28"
+    },
+    {
+      "run_id": 35,
+      "run_name": "run_0035",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "54d74b9eb9c1"
+    },
+    {
+      "run_id": 36,
+      "run_name": "run_0036",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "50e0e6636218"
+    },
+    {
+      "run_id": 37,
+      "run_name": "run_0037",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "79065b9470bd"
+    },
+    {
+      "run_id": 38,
+      "run_name": "run_0038",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "9f640e7252dc"
+    },
+    {
+      "run_id": 39,
+      "run_name": "run_0039",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "f1751fb9bc86"
+    },
+    {
+      "run_id": 40,
+      "run_name": "run_0040",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "08602ecc169b"
+    },
+    {
+      "run_id": 41,
+      "run_name": "run_0041",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "c60dacfa4e16"
+    },
+    {
+      "run_id": 42,
+      "run_name": "run_0042",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "36b64cbedc15"
+    },
+    {
+      "run_id": 43,
+      "run_name": "run_0043",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "bef3a06a8a41"
+    },
+    {
+      "run_id": 44,
+      "run_name": "run_0044",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "9624db6ccc89"
+    },
+    {
+      "run_id": 45,
+      "run_name": "run_0045",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "27317b4c3d17"
+    },
+    {
+      "run_id": 46,
+      "run_name": "run_0046",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "588513411d17"
+    },
+    {
+      "run_id": 47,
+      "run_name": "run_0047",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "cd9c866f677e"
+    },
+    {
+      "run_id": 48,
+      "run_name": "run_0048",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "8d19f6bbd769"
+    },
+    {
+      "run_id": 49,
+      "run_name": "run_0049",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "693fd73eb66d"
+    },
+    {
+      "run_id": 50,
+      "run_name": "run_0050",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "537864377b90"
+    },
+    {
+      "run_id": 51,
+      "run_name": "run_0051",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "2da6ea325aa6"
+    },
+    {
+      "run_id": 52,
+      "run_name": "run_0052",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "a3d2951fb102"
+    },
+    {
+      "run_id": 53,
+      "run_name": "run_0053",
+      "params": {
+        "omega_factor": 0.5,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "87c8b467faf6"
+    },
+    {
+      "run_id": 54,
+      "run_name": "run_0054",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "a294e2afccae"
+    },
+    {
+      "run_id": 55,
+      "run_name": "run_0055",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "84f918b65a26"
+    },
+    {
+      "run_id": 56,
+      "run_name": "run_0056",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "674b7f339f40"
+    },
+    {
+      "run_id": 57,
+      "run_name": "run_0057",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "853537077171"
+    },
+    {
+      "run_id": 58,
+      "run_name": "run_0058",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "af6b4232c208"
+    },
+    {
+      "run_id": 59,
+      "run_name": "run_0059",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "64a1cac19c5f"
+    },
+    {
+      "run_id": 60,
+      "run_name": "run_0060",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "cba067722615"
+    },
+    {
+      "run_id": 61,
+      "run_name": "run_0061",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "e0692b74e411"
+    },
+    {
+      "run_id": 62,
+      "run_name": "run_0062",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "e95171d72f9c"
+    },
+    {
+      "run_id": 63,
+      "run_name": "run_0063",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "a2313949cdcc"
+    },
+    {
+      "run_id": 64,
+      "run_name": "run_0064",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "49faad6bf733"
+    },
+    {
+      "run_id": 65,
+      "run_name": "run_0065",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "2dbee5a42964"
+    },
+    {
+      "run_id": 66,
+      "run_name": "run_0066",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "bd84e4e5f121"
+    },
+    {
+      "run_id": 67,
+      "run_name": "run_0067",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "673368d6a6ef"
+    },
+    {
+      "run_id": 68,
+      "run_name": "run_0068",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "98b19c8f778a"
+    },
+    {
+      "run_id": 69,
+      "run_name": "run_0069",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "6e03ccee9c95"
+    },
+    {
+      "run_id": 70,
+      "run_name": "run_0070",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "edc9c921841d"
+    },
+    {
+      "run_id": 71,
+      "run_name": "run_0071",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "3011fe331495"
+    },
+    {
+      "run_id": 72,
+      "run_name": "run_0072",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "7792ece8f49c"
+    },
+    {
+      "run_id": 73,
+      "run_name": "run_0073",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "c064fa26fe88"
+    },
+    {
+      "run_id": 74,
+      "run_name": "run_0074",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "6a87803416bf"
+    },
+    {
+      "run_id": 75,
+      "run_name": "run_0075",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "51b305a73bbc"
+    },
+    {
+      "run_id": 76,
+      "run_name": "run_0076",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "f2e8a93aa19a"
+    },
+    {
+      "run_id": 77,
+      "run_name": "run_0077",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "a9025fa898f8"
+    },
+    {
+      "run_id": 78,
+      "run_name": "run_0078",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "aff02a71641f"
+    },
+    {
+      "run_id": 79,
+      "run_name": "run_0079",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "fbb5f2345c09"
+    },
+    {
+      "run_id": 80,
+      "run_name": "run_0080",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "72946793a1ff"
+    },
+    {
+      "run_id": 81,
+      "run_name": "run_0081",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "526203688396"
+    },
+    {
+      "run_id": 82,
+      "run_name": "run_0082",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "0ce01cde4f0e"
+    },
+    {
+      "run_id": 83,
+      "run_name": "run_0083",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "ebb10a1a29a4"
+    },
+    {
+      "run_id": 84,
+      "run_name": "run_0084",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "c1dda6c67367"
+    },
+    {
+      "run_id": 85,
+      "run_name": "run_0085",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "75591f9f11f6"
+    },
+    {
+      "run_id": 86,
+      "run_name": "run_0086",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "850a08fac51a"
+    },
+    {
+      "run_id": 87,
+      "run_name": "run_0087",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "499a55c174f5"
+    },
+    {
+      "run_id": 88,
+      "run_name": "run_0088",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "c3a69efcc678"
+    },
+    {
+      "run_id": 89,
+      "run_name": "run_0089",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "2d57e9ca94db"
+    },
+    {
+      "run_id": 90,
+      "run_name": "run_0090",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "727059761af8"
+    },
+    {
+      "run_id": 91,
+      "run_name": "run_0091",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "d4963ece6835"
+    },
+    {
+      "run_id": 92,
+      "run_name": "run_0092",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "094ab9436625"
+    },
+    {
+      "run_id": 93,
+      "run_name": "run_0093",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "50a66dacab91"
+    },
+    {
+      "run_id": 94,
+      "run_name": "run_0094",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "6ba6b25a9ae9"
+    },
+    {
+      "run_id": 95,
+      "run_name": "run_0095",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "df4d82321d0b"
+    },
+    {
+      "run_id": 96,
+      "run_name": "run_0096",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "093c2d435223"
+    },
+    {
+      "run_id": 97,
+      "run_name": "run_0097",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "46e25f22b831"
+    },
+    {
+      "run_id": 98,
+      "run_name": "run_0098",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "5fa704f0f4b8"
+    },
+    {
+      "run_id": 99,
+      "run_name": "run_0099",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "908900d18778"
+    },
+    {
+      "run_id": 100,
+      "run_name": "run_0100",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "c669e46705dd"
+    },
+    {
+      "run_id": 101,
+      "run_name": "run_0101",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "16d34e212c06"
+    },
+    {
+      "run_id": 102,
+      "run_name": "run_0102",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "e69b0fa90754"
+    },
+    {
+      "run_id": 103,
+      "run_name": "run_0103",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "d0406071e34d"
+    },
+    {
+      "run_id": 104,
+      "run_name": "run_0104",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "5c43533ff566"
+    },
+    {
+      "run_id": 105,
+      "run_name": "run_0105",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "c7d6aea26503"
+    },
+    {
+      "run_id": 106,
+      "run_name": "run_0106",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "a5c32230037b"
+    },
+    {
+      "run_id": 107,
+      "run_name": "run_0107",
+      "params": {
+        "omega_factor": 1.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "efe112b7b049"
+    },
+    {
+      "run_id": 108,
+      "run_name": "run_0108",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "16d3c73ef89b"
+    },
+    {
+      "run_id": 109,
+      "run_name": "run_0109",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "7d0d153e2c03"
+    },
+    {
+      "run_id": 110,
+      "run_name": "run_0110",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "53a6725fcc75"
+    },
+    {
+      "run_id": 111,
+      "run_name": "run_0111",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "3f32aa1e57cb"
+    },
+    {
+      "run_id": 112,
+      "run_name": "run_0112",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "1f3f61522ba1"
+    },
+    {
+      "run_id": 113,
+      "run_name": "run_0113",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "d0d5b9969a32"
+    },
+    {
+      "run_id": 114,
+      "run_name": "run_0114",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "8b4fadf2574a"
+    },
+    {
+      "run_id": 115,
+      "run_name": "run_0115",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "6ae492202141"
+    },
+    {
+      "run_id": 116,
+      "run_name": "run_0116",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "5924b02911eb"
+    },
+    {
+      "run_id": 117,
+      "run_name": "run_0117",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "2cc0ce2f7bae"
+    },
+    {
+      "run_id": 118,
+      "run_name": "run_0118",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "daabc1a80df5"
+    },
+    {
+      "run_id": 119,
+      "run_name": "run_0119",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "31521c95f425"
+    },
+    {
+      "run_id": 120,
+      "run_name": "run_0120",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "3ef5956ccbd5"
+    },
+    {
+      "run_id": 121,
+      "run_name": "run_0121",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "b0283e942b79"
+    },
+    {
+      "run_id": 122,
+      "run_name": "run_0122",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "75e399fdf649"
+    },
+    {
+      "run_id": 123,
+      "run_name": "run_0123",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "937e059a102a"
+    },
+    {
+      "run_id": 124,
+      "run_name": "run_0124",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "5c11263d6334"
+    },
+    {
+      "run_id": 125,
+      "run_name": "run_0125",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 40.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "8af96db32730"
+    },
+    {
+      "run_id": 126,
+      "run_name": "run_0126",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "279068ad0cee"
+    },
+    {
+      "run_id": 127,
+      "run_name": "run_0127",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "1da491d58b70"
+    },
+    {
+      "run_id": 128,
+      "run_name": "run_0128",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "efed27e3be6e"
+    },
+    {
+      "run_id": 129,
+      "run_name": "run_0129",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "e603b6b65df4"
+    },
+    {
+      "run_id": 130,
+      "run_name": "run_0130",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "232f8e97c3d6"
+    },
+    {
+      "run_id": 131,
+      "run_name": "run_0131",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "6aeefa90c0f3"
+    },
+    {
+      "run_id": 132,
+      "run_name": "run_0132",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "e117a4861625"
+    },
+    {
+      "run_id": 133,
+      "run_name": "run_0133",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "31129e6267e7"
+    },
+    {
+      "run_id": 134,
+      "run_name": "run_0134",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "a86f0fc9ab13"
+    },
+    {
+      "run_id": 135,
+      "run_name": "run_0135",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "d69781488296"
+    },
+    {
+      "run_id": 136,
+      "run_name": "run_0136",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "2c614314cd3e"
+    },
+    {
+      "run_id": 137,
+      "run_name": "run_0137",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "dc24947621a8"
+    },
+    {
+      "run_id": 138,
+      "run_name": "run_0138",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "b3a3fa62779b"
+    },
+    {
+      "run_id": 139,
+      "run_name": "run_0139",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "55a502c3416d"
+    },
+    {
+      "run_id": 140,
+      "run_name": "run_0140",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "79db65443683"
+    },
+    {
+      "run_id": 141,
+      "run_name": "run_0141",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "0eaac7acf3ee"
+    },
+    {
+      "run_id": 142,
+      "run_name": "run_0142",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "18d8145440a6"
+    },
+    {
+      "run_id": 143,
+      "run_name": "run_0143",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 60.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "c4bf837c83c0"
+    },
+    {
+      "run_id": 144,
+      "run_name": "run_0144",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 0
+      },
+      "param_hash": "7ae73e4fbb19"
+    },
+    {
+      "run_id": 145,
+      "run_name": "run_0145",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 1
+      },
+      "param_hash": "ea98084882b2"
+    },
+    {
+      "run_id": 146,
+      "run_name": "run_0146",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 2
+      },
+      "param_hash": "60854c486154"
+    },
+    {
+      "run_id": 147,
+      "run_name": "run_0147",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 3
+      },
+      "param_hash": "ac49a087ecb6"
+    },
+    {
+      "run_id": 148,
+      "run_name": "run_0148",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 4
+      },
+      "param_hash": "88f88c573d56"
+    },
+    {
+      "run_id": 149,
+      "run_name": "run_0149",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 5.0,
+        "seed": 5
+      },
+      "param_hash": "e08aa04c7a38"
+    },
+    {
+      "run_id": 150,
+      "run_name": "run_0150",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 0
+      },
+      "param_hash": "cf081523e269"
+    },
+    {
+      "run_id": 151,
+      "run_name": "run_0151",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 1
+      },
+      "param_hash": "1d33bcb95438"
+    },
+    {
+      "run_id": 152,
+      "run_name": "run_0152",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 2
+      },
+      "param_hash": "35b4509a1dcf"
+    },
+    {
+      "run_id": 153,
+      "run_name": "run_0153",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 3
+      },
+      "param_hash": "063b2d6fac33"
+    },
+    {
+      "run_id": 154,
+      "run_name": "run_0154",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 4
+      },
+      "param_hash": "1795fae12eb0"
+    },
+    {
+      "run_id": 155,
+      "run_name": "run_0155",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 10.0,
+        "seed": 5
+      },
+      "param_hash": "d4f385a8ddaa"
+    },
+    {
+      "run_id": 156,
+      "run_name": "run_0156",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 0
+      },
+      "param_hash": "d928f75e443f"
+    },
+    {
+      "run_id": 157,
+      "run_name": "run_0157",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 1
+      },
+      "param_hash": "201e472a7dab"
+    },
+    {
+      "run_id": 158,
+      "run_name": "run_0158",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 2
+      },
+      "param_hash": "1f117b4b1d25"
+    },
+    {
+      "run_id": 159,
+      "run_name": "run_0159",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 3
+      },
+      "param_hash": "ad114979fd94"
+    },
+    {
+      "run_id": 160,
+      "run_name": "run_0160",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 4
+      },
+      "param_hash": "194dfdbda26e"
+    },
+    {
+      "run_id": 161,
+      "run_name": "run_0161",
+      "params": {
+        "omega_factor": 2.0,
+        "delta_T_y": 80.0,
+        "delta_theta_z": 20.0,
+        "seed": 5
+      },
+      "param_hash": "eb431197f576"
+    }
+  ]
+}

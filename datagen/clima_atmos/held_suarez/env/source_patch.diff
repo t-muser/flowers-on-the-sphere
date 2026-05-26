@@ -1,0 +1,183 @@
+diff --git a/src/parameterized_tendencies/radiation/held_suarez.jl b/src/parameterized_tendencies/radiation/held_suarez.jl
+index 58ba6e7..236d879 100644
+--- a/src/parameterized_tendencies/radiation/held_suarez.jl
++++ b/src/parameterized_tendencies/radiation/held_suarez.jl
+@@ -28,6 +28,15 @@ function held_suarez_ΔT_y_T_equator(
+     return ΔT_y, T_equator
+ end
+ 
++# flowers-on-the-sphere patch:
++# Adds three fields τ_atm/τ_surf/τ_drag (seconds) to the HS forcing
++# params struct so each ensemble corner can pick its own newtonian-
++# relaxation and drag timescales. Stock ClimaAtmos hardcodes them as
++# k_a = 1/(40*day), k_s = 1/(4*day), k_f = 1/day. The tendency
++# functions below populate the new fields from ENV vars
++# (HS_TAU_ATM_DAYS / HS_TAU_SURF_DAYS / HS_TAU_DRAG_DAYS), falling back
++# to the stock 40/4/1 day defaults when unset. See
++# datagen/clima_atmos/held_suarez/env/source_patch.diff.
+ struct HeldSuarezForcingParams{FT}
+     ΔT_y::FT
+     day::FT
+@@ -40,9 +49,26 @@ struct HeldSuarezForcingParams{FT}
+     κ_d::FT
+     grav::FT
+     MSLP::FT
++    τ_atm::FT
++    τ_surf::FT
++    τ_drag::FT
+ end
+ Base.Broadcast.broadcastable(x::HeldSuarezForcingParams) = tuple(x)
+ 
++# flowers-on-the-sphere patch:
++# Reads an HS timescale (in days) from an ENV var and returns it in
++# seconds, falling back to ``default_days`` if the var is missing or
++# unparseable. ENV-var transport is intentional — it lets a single
++# Julia process pick its corner's timescales without forking
++# ClimaAtmos's TOML-/ClimaParams-based parameter system.
++function _hs_tau_seconds(env_name::AbstractString, default_days::Real, day::Real)
++    s = get(ENV, env_name, "")
++    isempty(s) && return default_days * day
++    val = tryparse(Float64, s)
++    val === nothing && return default_days * day
++    return val * day
++end
++
+ function compute_ΔρT(
+     T_sfc::FT,
+     ρ::FT,
+@@ -52,8 +78,8 @@ function compute_ΔρT(
+     s::HeldSuarezForcingParams,
+ ) where {FT}
+     σ = compute_σ(z_surface, p, T_sfc, s)
+-    k_a = 1 / (40 * s.day)
+-    k_s = 1 / (4 * s.day)
++    k_a = 1 / s.τ_atm
++    k_s = 1 / s.τ_surf
+ 
+     φ = deg2rad(lat)
+     return (k_a + (k_s - k_a) * height_factor(σ, s.σ_b) * abs2(abs2(cos(φ)))) *
+@@ -108,7 +134,12 @@ function held_suarez_forcing_tendency_ρe_tot(
+     Δθ_z = FT(CAP.Δθ_z(params))
+     T_min = FT(CAP.T_min_hs(params))
+     σ_b = CAP.σ_b(params)
+-    k_f = 1 / day
++
++    # flowers-on-the-sphere patch: read per-corner timescales from ENV.
++    τ_atm  = FT(_hs_tau_seconds("HS_TAU_ATM_DAYS",  40, day))
++    τ_surf = FT(_hs_tau_seconds("HS_TAU_SURF_DAYS", 4,  day))
++    τ_drag = FT(_hs_tau_seconds("HS_TAU_DRAG_DAYS", 1,  day))
++    k_f = 1 / τ_drag
+ 
+     z_surface = Fields.level(ᶠz, Fields.half)
+ 
+@@ -126,6 +157,9 @@ function held_suarez_forcing_tendency_ρe_tot(
+         κ_d,
+         grav,
+         MSLP,
++        τ_atm,
++        τ_surf,
++        τ_drag,
+     )
+ 
+     return @. lazy(
+@@ -156,7 +190,12 @@ function held_suarez_forcing_tendency_uₕ(
+     Δθ_z = FT(CAP.Δθ_z(params))
+     T_min = FT(CAP.T_min_hs(params))
+     σ_b = CAP.σ_b(params)
+-    k_f = 1 / day
++
++    # flowers-on-the-sphere patch: per-corner timescales from ENV.
++    τ_atm  = FT(_hs_tau_seconds("HS_TAU_ATM_DAYS",  40, day))
++    τ_surf = FT(_hs_tau_seconds("HS_TAU_SURF_DAYS", 4,  day))
++    τ_drag = FT(_hs_tau_seconds("HS_TAU_DRAG_DAYS", 1,  day))
++    k_f = 1 / τ_drag
+ 
+     z_surface = Fields.level(ᶠz, Fields.half)
+ 
+@@ -174,6 +213,9 @@ function held_suarez_forcing_tendency_uₕ(
+         κ_d,
+         grav,
+         MSLP,
++        τ_atm,
++        τ_surf,
++        τ_drag,
+     )
+ 
+     return @. lazy(-(k_f * height_factor(z_surface, ᶜp, T_sfc, hs_params)) * ᶜuₕ)
+diff --git a/src/setups/DecayingProfile.jl b/src/setups/DecayingProfile.jl
+index 3484273..3e55886 100644
+--- a/src/setups/DecayingProfile.jl
++++ b/src/setups/DecayingProfile.jl
+@@ -9,6 +9,12 @@ Uses `DecayingTemperatureProfile` with T_surface=290K, T_min=220K, z_scale=8km.
+ struct DecayingProfile{TP}
+     perturb::Bool
+     thermo_params::TP
++    # flowers-on-the-sphere patch: per-corner IC seed plumbed via env var.
++    # ``-1`` means "stock deterministic perturbation"; values >= 0 select
++    # the GPU-safe seeded noise path below. Stored as Int so the struct
++    # has a concrete layout and gets captured into CUDA kernels cleanly
++    # (a Union{Int,Nothing} field would break GPU compilation).
++    ic_seed::Int
+ end
+ 
+ function DecayingProfile(;
+@@ -16,12 +22,48 @@ function DecayingProfile(;
+     thermo_params = nothing,
+     params = nothing,
+ )
++    ic_seed = let s = get(ENV, "HS_IC_SEED", "")
++        isempty(s) ? -1 : something(tryparse(Int, s), -1)
++    end
+     if !isnothing(params)
+-        return DecayingProfile(perturb, params.thermodynamics_params)
++        return DecayingProfile(perturb, params.thermodynamics_params, ic_seed)
++    end
++    return DecayingProfile(perturb, thermo_params, ic_seed)
++end
++
++# flowers-on-the-sphere patch:
++# Stock CliMA seeds the temperature IC with a deterministic
++# ``0.1 · sind(long) · mask(z<5km)`` bump. For our seeded sweep we
++# replace that bump with a pseudo-random, GPU-safe noise of the same
++# amplitude built from a 3-cosine sum on ``(seed, lat, long, z)``.
++# The seed is captured into the closure by the ``setup::DecayingProfile``
++# struct field — reading ENV or constructing a stateful RNG inside the
++# kernel would trip CUDA's "no Julia runtime calls on device" rule.
++#
++# The cosine-sum approximates a standard normal in the ``[-√3, √3]`` range;
++# distinct seeds produce decorrelated fields. When ``HS_IC_SEED`` is
++# unset (``ic_seed < 0``) we fall through to the stock bump.
++_perturb_dispatch(::DecayingProfile, coord::Geometry.AbstractPoint{FT}) where {FT} =
++    _temperature_perturbation(coord)
++
++function _perturb_dispatch(setup::DecayingProfile, coord::Geometry.LatLongZPoint{FT}) where {FT}
++    z_mask = coord.z < 5000
++    if setup.ic_seed < 0 || !z_mask
++        return FT(0.1) * sind(coord.long) * z_mask
+     end
+-    return DecayingProfile(perturb, thermo_params)
++    s    = FT(setup.ic_seed)
++    lat  = coord.lat
++    long = coord.long
++    z    = coord.z
++    a = cos(FT(12.9898) * lat + FT(78.233)  * long + FT(43.2581) * z + FT(1.0)  * s)
++    b = cos(FT(39.346)  * lat + FT(11.135)  * long + FT(73.156)  * z + FT(7.0)  * s)
++    c = cos(FT(53.71)   * long + FT(17.91)   * lat  + FT(91.41)   * z + FT(13.0) * s)
++    n = (a + b + c) / sqrt(FT(3))
++    return FT(0.1) * n
+ end
+ 
++# Original coord-only dispatch (kept for non-spherical setups that do
++# not need seeding).
+ _temperature_perturbation(coord::Geometry.LatLongZPoint{FT}) where {FT} =
+     FT(0.1) * sind(coord.long) * (coord.z < 5000)
+ _temperature_perturbation(coord::Geometry.XZPoint{FT}) where {FT} =
+@@ -45,7 +87,7 @@ function center_initial_condition(setup::DecayingProfile, local_geometry, params
+     (; z) = local_geometry.coordinates
+     T, p = temp_profile(thermo_params, z)
+     if setup.perturb
+-        T += _temperature_perturbation(local_geometry.coordinates)
++        T += _perturb_dispatch(setup, local_geometry.coordinates)
+     end
+ 
+     return physical_state(; T, p)

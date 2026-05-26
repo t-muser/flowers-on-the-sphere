@@ -1,0 +1,29 @@
+# Higher-res variant: 24 spectral elements per cube face × 3-degree
+# polynomial ≈ 0.75° effective grid. Default output is ~144×288 lat-lon
+# (~2.25× the legacy MITgcm 64×128). About 5× the wall cost of he12
+# per sim-day on L40s. Use for high-res showcase runs, not the full
+# 162-corner sweep (won't fit a 24 h budget per corner times 162).
+config: sphere
+h_elem: 24
+nh_poly: 3
+z_elem: 31
+z_max: 60000.0
+dz_bottom: 50.0
+dt: "100secs"
+ode_algo: ARS343
+hyperdiff: Hyperdiffusion
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+device: "CUDADevice"
+netcdf_output_at_levels: false
+diagnostics:
+  - short_name: [ua, va, ta]
+    period: "6hours"
+    reduction_time: "inst"
+    pressure_coordinates: true
+  - short_name: [pfull]
+    period: "6hours"
+    reduction_time: "inst"
