@@ -82,10 +82,17 @@ def _field_accumulators(arr: np.ndarray):
 
 
 def process_file(path: str):
-    """Per-file partial accumulators. Returns {field: {"comp": [(acc, dacc), ...]}}.
+    """Per-file partial accumulators.
 
-    Scalars have one component; vectors have one per stored channel."""
-    out: dict[str, list] = {}
+    Returns ``(fields, scalars)``:
+      * ``fields`` maps field name -> [(acc, dacc), ...] (one entry per
+        component; scalars-as-fields have one, vectors one per channel);
+      * ``scalars`` maps each per-run constant scalar (the ``param_*`` values)
+        to a one-observation Welford acc. ``ZScoreNormalization`` needs a
+        mean/std for every constant scalar the dataset exposes, even when it is
+        not fed to the model (meta_scalars=[])."""
+    fields: dict[str, list] = {}
+    scalars: dict[str, tuple] = {}
     with h5py.File(path, "r") as f:
         for grp in ("t0_fields", "t1_fields", "t2_fields"):
             if grp not in f:
@@ -94,13 +101,17 @@ def process_file(path: str):
                 name = str(name)
                 arr = f[grp][name][0]  # drop the (size-1) trajectory axis
                 if grp == "t0_fields":
-                    out[name] = [_field_accumulators(arr)]
+                    fields[name] = [_field_accumulators(arr)]
                 else:  # trailing axis enumerates components
-                    out[name] = [
+                    fields[name] = [
                         _field_accumulators(arr[..., c])
                         for c in range(arr.shape[-1])
                     ]
-    return out
+        if "scalars" in f:
+            for name in f["scalars"].attrs.get("field_names", []):
+                name = str(name)
+                scalars[name] = (1, float(f["scalars"][name][()]), 0.0)  # one obs/run
+    return fields, scalars
 
 
 def _merge(into: dict, part: dict):
@@ -110,6 +121,21 @@ def _merge(into: dict, part: dict):
         for c, (acc, dacc) in enumerate(comps):
             i_acc, i_dacc = into[name][c]
             into[name][c] = (_combine(*i_acc, *acc), _combine(*i_dacc, *dacc))
+
+
+def _merge_scalars(into: dict, part: dict):
+    for name, acc in part.items():
+        into[name] = _combine(*into.get(name, _ZERO), *acc)
+
+
+def _scalar_as_stats(acc) -> dict:
+    """Constant per-run scalar: mean/std/rms over run values. Deltas are 0
+    (time-invariant) and unused by the normalizer for constant scalars."""
+    f = _finalise(acc)
+    return {
+        "mean": round(f["mean"], 6), "std": round(f["std"], 6),
+        "rms": round(f["rms"], 6), "mean_delta": 0.0, "std_delta": 0.0,
+    }
 
 
 def _as_stats(comps: list) -> dict:
@@ -145,14 +171,18 @@ def main() -> int:
     print(f"computing stats over {len(files)} train files in {train_dir}")
 
     merged: dict[str, list] = {}
+    merged_scalars: dict[str, tuple] = {}
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
         futures = {ex.submit(process_file, p): p for p in files}
         for i, fut in enumerate(as_completed(futures)):
-            _merge(merged, fut.result())
+            fields, scalars = fut.result()
+            _merge(merged, fields)
+            _merge_scalars(merged_scalars, scalars)
             if (i + 1) % 25 == 0 or i == len(files) - 1:
                 print(f"  [{i + 1}/{len(files)}]")
 
     stats = {name: _as_stats(comps) for name, comps in merged.items()}
+    stats.update({name: _scalar_as_stats(acc) for name, acc in merged_scalars.items()})
 
     (args.root / "stats.yaml").write_text(yaml.safe_dump(stats, sort_keys=False))
     (args.root / "stats.json").write_text(json.dumps(stats, indent=2) + "\n")
