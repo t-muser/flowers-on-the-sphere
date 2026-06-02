@@ -1,0 +1,26 @@
+# Cahn-Hilliard phase field on the sphere, HDF5 spec (scripts/zarr_to_hdf5.py).
+# 256x512 equiangular grid, phi = 1 channel.
+data:
+  _target_: fots.data.datamodule.NotWellDataModule
+  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/cahn-hilliard-sphere-hdf5
+  well_dataset_name: cahn_hilliard  # experiment-naming only
+
+  train_dataset:
+    _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
+    _partial_: true
+  eval_dataset:
+    _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
+    _partial_: true
+
+  batch_size: 2
+  data_workers: 8
+  n_steps_input: 1
+  n_steps_output: 1
+  min_dt_stride: 1
+  max_dt_stride: 1
+
+  use_normalization: false  # add an inline `stats:` block for real training
+  include_filters: []
+  exclude_filters: []
+  boundary_return_type: null  # closed sphere: no BCs
+  meta_scalars: []

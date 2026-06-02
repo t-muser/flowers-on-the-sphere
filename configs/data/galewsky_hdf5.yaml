@@ -1,0 +1,27 @@
+# Galewsky shallow-water on the sphere, HDF5 spec (scripts/zarr_to_hdf5.py).
+# 256x512 equiangular grid, 3 channels: h (scalar) + velocity vector
+# [u_phi, u_theta]. Diagnostic `vorticity` is dropped at conversion time.
+data:
+  _target_: fots.data.datamodule.NotWellDataModule
+  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/galewsky-sw-hdf5
+  well_dataset_name: galewsky_sw  # experiment-naming only
+
+  train_dataset:
+    _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
+    _partial_: true
+  eval_dataset:
+    _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
+    _partial_: true
+
+  batch_size: 2
+  data_workers: 8
+  n_steps_input: 1
+  n_steps_output: 1
+  min_dt_stride: 1
+  max_dt_stride: 1
+
+  use_normalization: false  # add an inline `stats:` block for real training
+  include_filters: []
+  exclude_filters: []
+  boundary_return_type: null  # closed sphere: no BCs
+  meta_scalars: []

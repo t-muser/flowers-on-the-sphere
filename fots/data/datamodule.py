@@ -115,6 +115,7 @@ class WellDataModule(AbstractDataModule):
         stats: Optional[Dict[str, Any]] = None,
         meta_scalars: Optional[List[Dict[str, str]]] = None,
         train_dataset: Callable[..., Any] = WellDataset,
+        eval_dataset: Callable[..., Any] = WellDataset,
         max_rollout_steps: int = 100,
         n_steps_input: int = 1,
         n_steps_output: int = 1,
@@ -323,7 +324,7 @@ class WellDataModule(AbstractDataModule):
                     else {}
                 ),
             )
-            self.val_dataset = WellDataset(
+            self.val_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="valid",
                 include_filters=include_filters,
@@ -344,7 +345,7 @@ class WellDataModule(AbstractDataModule):
                     else {}
                 ),
             )
-            self.rollout_val_dataset = WellDataset(
+            self.rollout_val_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="valid",
                 include_filters=include_filters,
@@ -367,7 +368,7 @@ class WellDataModule(AbstractDataModule):
                     else {}
                 ),
             )
-            self.test_dataset = WellDataset(
+            self.test_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="test",
                 include_filters=include_filters,
@@ -388,7 +389,7 @@ class WellDataModule(AbstractDataModule):
                     else {}
                 ),
             )
-            self.rollout_test_dataset = WellDataset(
+            self.rollout_test_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="test",
                 include_filters=include_filters,
@@ -691,6 +692,7 @@ class NotWellDataModule(WellDataModule):
         stats: Optional[Dict[str, Any]] = None,
         meta_scalars: Optional[List[Dict[str, str]]] = None,
         train_dataset: Callable[..., Any] = WellDataset,
+        eval_dataset: Callable[..., Any] = WellDataset,
         max_rollout_steps: int = 100,
         n_steps_input: int = 1,
         n_steps_output: int = 1,
@@ -895,7 +897,7 @@ class NotWellDataModule(WellDataModule):
                     else {}
                 ),
             )
-            self.val_dataset = WellDataset(
+            self.val_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="valid",
                 include_filters=include_filters,
@@ -916,7 +918,7 @@ class NotWellDataModule(WellDataModule):
                     else {}
                 ),
             )
-            self.rollout_val_dataset = WellDataset(
+            self.rollout_val_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="valid",
                 include_filters=include_filters,
@@ -939,7 +941,7 @@ class NotWellDataModule(WellDataModule):
                     else {}
                 ),
             )
-            self.test_dataset = WellDataset(
+            self.test_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="test",
                 include_filters=include_filters,
@@ -960,7 +962,7 @@ class NotWellDataModule(WellDataModule):
                     else {}
                 ),
             )
-            self.rollout_test_dataset = WellDataset(
+            self.rollout_test_dataset = eval_dataset(
                 **path_kwargs,
                 well_split_name="test",
                 include_filters=include_filters,
