@@ -21,5 +21,6 @@ try:
 except ImportError:
     Segformer = _MissingNatten
 from fots.models.baselines.unet import UNet
+from fots.models.baselines.climax import ViT, ViTWrapper
 
-__all__ = ["Segformer", "Transformer", "UNet"]
+__all__ = ["Segformer", "Transformer", "UNet", "ViT", "ViTWrapper"]

@@ -1,0 +1,18 @@
+# ViT baseline — the ClimaX backbone (Nguyen et al., "ClimaX",
+# https://arxiv.org/abs/2301.10343) with the multi-variable
+# tokenization/aggregation machinery stripped, so it consumes a single
+# stacked `inp_chans` tensor like the other baselines. The same ViT is the
+# backbone Stormer and ClimaX build on.
+#
+# embed_dim=384 / depth=8 -> ~18.6M params at the 144x288, 25-channel HS
+# grid, for parameter-matched comparison with the other baselines.
+model:
+  _target_: fots.models.baselines.climax.ViTWrapper
+  patch_size: 2
+  embed_dim: 384
+  depth: 8
+  decoder_depth: 2
+  num_heads: 16
+  mlp_ratio: 4.0
+  drop_path: 0.1
+  drop_rate: 0.1
