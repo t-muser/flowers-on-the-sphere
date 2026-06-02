@@ -16,6 +16,7 @@ third_party/
 slurm/*.out
 slurm/*.err
 datagen/**/slurm/logs/
+scripts/logs/
 
 # Datagen-generated run configs and local data paths
 datagen/**/configs/

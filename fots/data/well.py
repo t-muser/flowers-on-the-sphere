@@ -419,6 +419,37 @@ class WellDataset(Dataset):
         self.restriction_set = global_indices
         self.len = len(global_indices)
 
+    def _scan_bc_types(self, _f, spatial_dims, file):
+        """Boundary-condition type per spatial dim, in order, read from the
+        file's ``boundary_conditions`` group. Override in subclasses whose data
+        has no boundary (e.g. a closed sphere) to return ``[]``."""
+        current_bc_types = []
+        for dim in spatial_dims:
+            # Find the BC associated with this spatial dimension
+            found = False
+            for bc_name in _f["boundary_conditions"].keys():
+                bc = _f["boundary_conditions"][bc_name]
+                associated_dims = bc.attrs.get("associated_dims", [])
+                if dim in associated_dims:
+                    current_bc_types.append(bc.attrs["bc_type"])
+                    found = True
+                    break
+            assert found, f"No boundary condition found for dimension {dim} in {file}"
+        return current_bc_types
+
+    def _field_component_names(self, _f, ti, field, order):
+        """Channel labels for one field's components. Default Well convention:
+        a rank-``order`` tensor has ``n_spatial_dims ** order`` components,
+        labelled by the product of spatial-dim names. Override in subclasses
+        that store an explicit per-component naming."""
+        ti_field_dims = [
+            "".join(xyz)
+            for xyz in itertools.product(
+                _f["dimensions"].attrs["spatial_dims"], repeat=order
+            )
+        ]
+        return [f"{field}_{dims}" if dims else field for dims in ti_field_dims]
+
     def _build_metadata(self):
         """Builds multi-file indices and checks that folder contains consistent dataset"""
         self.n_files = len(self.files_paths)
@@ -473,20 +504,9 @@ class WellDataset(Dataset):
                 self.file_index_offsets.append(
                     self.file_index_offsets[-1] + trajectories * windows_per_trajectory
                 )
-                # Check BCs - preserve spatial dimension ordering
+                # Check BCs - preserve spatial dimension ordering.
                 spatial_dims = _f["dimensions"].attrs["spatial_dims"]
-                current_bc_types = []
-                for dim in spatial_dims:
-                    # Find the BC associated with this spatial dimension
-                    found = False
-                    for bc_name in _f["boundary_conditions"].keys():
-                        bc = _f["boundary_conditions"][bc_name]
-                        associated_dims = bc.attrs.get("associated_dims", [])
-                        if dim in associated_dims:
-                            current_bc_types.append(bc.attrs["bc_type"])
-                            found = True
-                            break
-                    assert found, f"No boundary condition found for dimension {dim} in {file}"
+                current_bc_types = self._scan_bc_types(_f, spatial_dims, file)
 
                 # Check consistency across files
                 if bc_types_list is None:
@@ -518,20 +538,10 @@ class WellDataset(Dataset):
 
                     for i in range(3):
                         ti = f"t{i}_fields"
-                        # if _f[ti][field].attrs["symmetric"]:
-                        # itertools.combinations_with_replacement
-                        ti_field_dims = [
-                            "".join(xyz)
-                            for xyz in itertools.product(
-                                _f["dimensions"].attrs["spatial_dims"],
-                                repeat=i,
-                            )
-                        ]
-
                         for field in _f[ti].attrs["field_names"]:
-                            for dims in ti_field_dims:
-                                field_name = f"{field}_{dims}" if dims else field
-
+                            for field_name in self._field_component_names(
+                                _f, ti, field, i
+                            ):
                                 if _f[ti][field].attrs["time_varying"]:
                                     self.field_names[i].append(field_name)
                                     if field not in seen:
