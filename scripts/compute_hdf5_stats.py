@@ -11,11 +11,15 @@ get a scalar stat; vector fields get one value per component, in stored order::
       std:  [<u>, <v>]
       ...
 
-Per field we report ``mean, std, rms, mean_delta, std_delta`` and ``log_mean /
-log_std = NaN`` (placeholders; we don't log-transform). ``*_delta`` are over
-consecutive-timestep differences within a trajectory (stride 1). For 3-D
-(leveled) datasets the stats are reduced over the level axis too -- one value
-per field, matching the single channel the field occupies.
+Per field we report ``mean, std, rms, mean_delta, std_delta``. ``*_delta`` are
+over consecutive-timestep differences within a trajectory (stride 1).
+
+For leveled datasets (a ``level`` spatial dim) stats are computed **per level**
+for fields that span it: a leveled scalar -> a per-level list, a leveled vector
+-> a per-level list of per-component values. Surface fields (ps) and all 2-D
+datasets stay reduced to a single value (per component for vectors). The
+per-level layout broadcasts over the level axis at normalize time
+(see SphericalHDF5Dataset).
 
 Parallel-Welford across files (Chan's algorithm) so peak memory is ~one field
 of one run per worker.
@@ -84,29 +88,47 @@ def _field_accumulators(arr: np.ndarray):
 def process_file(path: str):
     """Per-file partial accumulators.
 
-    Returns ``(fields, scalars)``:
-      * ``fields`` maps field name -> [(acc, dacc), ...] (one entry per
-        component; scalars-as-fields have one, vectors one per channel);
-      * ``scalars`` maps each per-run constant scalar (the ``param_*`` values)
-        to a one-observation Welford acc. ``ZScoreNormalization`` needs a
-        mean/std for every constant scalar the dataset exposes, even when it is
-        not fed to the model (meta_scalars=[])."""
-    fields: dict[str, list] = {}
+    Returns ``(fields, scalars)``. Each field maps to::
+
+        {"per_level": bool, "is_vec": bool, "nlev": int, "ncomp": int,
+         "cells": {index_tuple: (acc, dacc)}}
+
+    one accumulator per output stat, where the index tuple is ``()`` for a
+    plain scalar, ``(c,)`` per component for a 2-D vector, ``(L,)`` per level
+    for a leveled scalar, and ``(L, c)`` per (level, component) for a leveled
+    vector. Leveled = the dataset has a ``level`` spatial dim and the field
+    actually spans it (>1); surface fields (ps, stored with a size-1 level
+    placeholder) stay reduced. ``scalars`` holds the per-run constant
+    ``param_*`` values (one obs/run) that ZScoreNormalization needs stats for."""
+    fields: dict[str, dict] = {}
     scalars: dict[str, tuple] = {}
     with h5py.File(path, "r") as f:
+        spatial_dims = [str(d) for d in f["dimensions"].attrs["spatial_dims"]]
+        level_pos = spatial_dims.index("level") if "level" in spatial_dims else None
         for grp in ("t0_fields", "t1_fields", "t2_fields"):
             if grp not in f:
                 continue
             for name in f[grp].attrs.get("field_names", []):
                 name = str(name)
-                arr = f[grp][name][0]  # drop the (size-1) trajectory axis
-                if grp == "t0_fields":
-                    fields[name] = [_field_accumulators(arr)]
-                else:  # trailing axis enumerates components
-                    fields[name] = [
-                        _field_accumulators(arr[..., c])
-                        for c in range(arr.shape[-1])
-                    ]
+                arr = f[grp][name][0]  # (time, *spatial[, comp]); traj axis dropped
+                is_vec = grp != "t0_fields"
+                ncomp = arr.shape[-1] if is_vec else 1
+                lax = 1 + level_pos if level_pos is not None else None  # +1 for time
+                nlev = arr.shape[lax] if lax is not None else 1
+                per_level = nlev > 1  # leveled field that actually spans levels
+                cells: dict[tuple, tuple] = {}
+                for c in range(ncomp):
+                    comp = arr[..., c] if is_vec else arr  # (time, *spatial)
+                    if per_level:
+                        for L in range(nlev):
+                            sub = np.take(comp, L, axis=lax)  # drop the level axis
+                            cells[(L, c) if is_vec else (L,)] = _field_accumulators(sub)
+                    else:
+                        cells[(c,) if is_vec else ()] = _field_accumulators(comp)
+                fields[name] = {
+                    "per_level": per_level, "is_vec": is_vec,
+                    "nlev": nlev if per_level else 0, "ncomp": ncomp, "cells": cells,
+                }
         if "scalars" in f:
             for name in f["scalars"].attrs.get("field_names", []):
                 name = str(name)
@@ -115,12 +137,14 @@ def process_file(path: str):
 
 
 def _merge(into: dict, part: dict):
-    for name, comps in part.items():
+    for name, fd in part.items():
         if name not in into:
-            into[name] = [(_ZERO, _ZERO) for _ in comps]
-        for c, (acc, dacc) in enumerate(comps):
-            i_acc, i_dacc = into[name][c]
-            into[name][c] = (_combine(*i_acc, *acc), _combine(*i_dacc, *dacc))
+            into[name] = {k: fd[k] for k in ("per_level", "is_vec", "nlev", "ncomp")}
+            into[name]["cells"] = {}
+        cells = into[name]["cells"]
+        for key, (acc, dacc) in fd["cells"].items():
+            i_acc, i_dacc = cells.get(key, (_ZERO, _ZERO))
+            cells[key] = (_combine(*i_acc, *acc), _combine(*i_dacc, *dacc))
 
 
 def _merge_scalars(into: dict, part: dict):
@@ -138,23 +162,35 @@ def _scalar_as_stats(acc) -> dict:
     }
 
 
-def _as_stats(comps: list) -> dict:
-    """Field-first stat dict; scalar -> floats, vector -> per-component lists."""
-    vec = len(comps) > 1
-    base = [_finalise(acc) for acc, _ in comps]
-    delta = [_finalise(dacc) for _, dacc in comps]
+def _as_stats(fd: dict) -> dict:
+    """Field-first stat dict whose shape follows the field: scalar -> floats;
+    2-D vector -> per-component lists; leveled scalar -> per-level lists;
+    leveled vector -> per-level lists of per-component (level-major)."""
+    cells = fd["cells"]
+    per_level, is_vec, nlev, ncomp = (
+        fd["per_level"], fd["is_vec"], fd["nlev"], fd["ncomp"],
+    )
 
-    def pick(vals):
-        return vals if vec else vals[0]
+    def stat(key, which):
+        acc, dacc = cells[key]
+        return _finalise(dacc if which == "delta" else acc)
 
+    def assemble(extract):
+        if per_level and is_vec:
+            return [[extract((L, c)) for c in range(ncomp)] for L in range(nlev)]
+        if per_level:
+            return [extract((L,)) for L in range(nlev)]
+        if is_vec:
+            return [extract((c,)) for c in range(ncomp)]
+        return extract(())
+
+    r = lambda x: round(x, 6)  # noqa: E731
     return {
-        "mean": pick([round(b["mean"], 6) for b in base]),
-        "std": pick([round(b["std"], 6) for b in base]),
-        "rms": pick([round(b["rms"], 6) for b in base]),
-        "log_mean": pick([float("nan")] * len(comps)),
-        "log_std": pick([float("nan")] * len(comps)),
-        "mean_delta": pick([round(d["mean"], 6) for d in delta]),
-        "std_delta": pick([round(d["std"], 6) for d in delta]),
+        "mean":       assemble(lambda k: r(stat(k, "base")["mean"])),
+        "std":        assemble(lambda k: r(stat(k, "base")["std"])),
+        "rms":        assemble(lambda k: r(stat(k, "base")["rms"])),
+        "mean_delta": assemble(lambda k: r(stat(k, "delta")["mean"])),
+        "std_delta":  assemble(lambda k: r(stat(k, "delta")["std"])),
     }
 
 
@@ -181,7 +217,7 @@ def main() -> int:
             if (i + 1) % 25 == 0 or i == len(files) - 1:
                 print(f"  [{i + 1}/{len(files)}]")
 
-    stats = {name: _as_stats(comps) for name, comps in merged.items()}
+    stats = {name: _as_stats(fd) for name, fd in merged.items()}
     stats.update({name: _scalar_as_stats(acc) for name, acc in merged_scalars.items()})
 
     (args.root / "stats.yaml").write_text(yaml.safe_dump(stats, sort_keys=False))
