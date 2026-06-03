@@ -5,7 +5,9 @@
 # adapter; a 3-D-aware model can consume the grid directly.
 data:
   _target_: fots.data.datamodule.NotWellDataModule
-  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/held-suarez-clima-hdf5
+  # NOTE: the .h5 data is NOT on iopsstor yet (only stats.* present) — this
+  # path is set for when it lands; training will fail until the data is here.
+  path: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/held-suarez-clima-hdf5
   dataset_name: held_suarez_clima  # experiment-naming only
 
   train_dataset:
@@ -22,8 +24,61 @@ data:
   min_dt_stride: 1
   max_dt_stride: 1
 
-  use_normalization: false  # add an inline `stats:` block for real training
+  # ZScore normalization. Full stats (fields + all per-trajectory constant
+  # scalars) inlined from held-suarez-clima-hdf5/stats.yaml; the_well needs an
+  # entry for every constant scalar or it silently disables normalization.
+  use_normalization: true
   include_filters: []
   exclude_filters: []
   boundary_return_type: null  # closed sphere: no BCs
   meta_scalars: []
+
+  stats:
+    T:
+      mean: 247.276343
+      std: 35.873049
+      rms: 249.864894
+      log_mean: .nan
+      log_std: .nan
+      mean_delta: -0.000138
+      std_delta: 0.684541
+    ps:
+      mean: 100044.747756
+      std: 993.98922
+      rms: 100049.685498
+      log_mean: .nan
+      log_std: .nan
+      mean_delta: -0.00388
+      std_delta: 146.920601
+    velocity:
+      mean: [3.502222, -0.000129]
+      std: [9.796603, 6.41015]
+      rms: [10.403797, 6.41015]
+      log_mean: [.nan, .nan]
+      log_std: [.nan, .nan]
+      mean_delta: [-1.4e-05, -4.0e-06]
+      std_delta: [1.582225, 2.016458]
+    omega_factor:
+      mean: 1.192308
+      std: 0.61201
+      rms: 1.340207
+      mean_delta: 0.0
+      std_delta: 0.0
+    delta_T_y:
+      mean: 60.0
+      std: 16.455067
+      rms: 62.215506
+      mean_delta: 0.0
+      std_delta: 0.0
+    delta_theta_z:
+      mean: 11.5
+      std: 6.128433
+      rms: 13.031028
+      mean_delta: 0.0
+      std_delta: 0.0
+    seed:
+      mean: 2.469231
+      std: 1.655706
+      rms: 2.972955
+      mean_delta: 0.0
+      std_delta: 0.0
