@@ -6,9 +6,12 @@
 #
 # embed_dim=384 / depth=8 -> ~18.6M params at the 144x288, 25-channel HS
 # grid, for parameter-matched comparison with the other baselines.
+# patch_size=4 matches ClimaX's high-res 1.40625° setup (128x256 -> 32x64
+# = 2048 tokens). At 256x512 this gives 64x128 = 8192 tokens; SDPA
+# (memory-efficient attention) keeps that tractable on GH200.
 model:
   _target_: fots.models.baselines.climax.ViTWrapper
-  patch_size: 2
+  patch_size: 4
   embed_dim: 384
   depth: 8
   decoder_depth: 2

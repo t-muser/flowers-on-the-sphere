@@ -3,8 +3,8 @@
 # [momentum_u, momentum_v].
 data:
   _target_: fots.data.datamodule.NotWellDataModule
-  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/shock-caps-hdf5
-  well_dataset_name: shock_caps  # experiment-naming only
+  path: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/shock-caps-hdf5
+  dataset_name: shock_caps  # experiment-naming only
 
   train_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
@@ -20,8 +20,52 @@ data:
   min_dt_stride: 1
   max_dt_stride: 1
 
-  use_normalization: false  # add an inline `stats:` block for real training
+  # ZScore normalization. Stats inlined from the dataset's own stats.yaml
+  # (shock-caps-hdf5/stats.yaml); inlined rather than read from disk because
+  # NotWellDataModule doesn't forward normalization_path and the WellDataset
+  # default (`../stats.yaml`) resolves to the parent dir, not the dataset.
+  use_normalization: true
   include_filters: []
   exclude_filters: []
   boundary_return_type: null  # closed sphere: no BCs
   meta_scalars: []
+
+  # Full stats (fields + all per-trajectory constant scalars): the_well treats
+  # the h5 `scalars/` group (seed, delta, K) as constant scalars, so
+  # ZScoreNormalization requires an entry for each or it errors out and
+  # silently disables normalization.
+  stats:
+    height:
+      mean: 1.3206
+      std: 0.331494
+      rms: 1.36157
+      log_mean: .nan
+      log_std: .nan
+      mean_delta: -6.7e-05
+      std_delta: 0.057143
+    momentum:
+      mean: [0.011379, 0.001716]
+      std: [0.571083, 0.503895]
+      rms: [0.571197, 0.503898]
+      log_mean: [.nan, .nan]
+      log_std: [.nan, .nan]
+      mean_delta: [-0.000241, 0.000159]
+      std_delta: [0.171645, 0.175489]
+    seed:
+      mean: 9.4475
+      std: 5.766909
+      rms: 11.068536
+      mean_delta: 0.0
+      std_delta: 0.0
+    delta:
+      mean: 0.5
+      std: 0.353553
+      rms: 0.612372
+      mean_delta: 0.0
+      std_delta: 0.0
+    K:
+      mean: 6.2
+      std: 5.455273
+      rms: 8.258329
+      mean_delta: 0.0
+      std_delta: 0.0

@@ -4,7 +4,7 @@
 data:
   _target_: fots.data.datamodule.NotWellDataModule
   path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/galewsky-sw-hdf5
-  well_dataset_name: galewsky_sw  # experiment-naming only
+  dataset_name: galewsky_sw  # experiment-naming only
 
   train_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset

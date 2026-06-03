@@ -684,7 +684,7 @@ class NotWellDataModule(WellDataModule):
         self,
         path: str,
         batch_size: int,
-        well_dataset_name: str,  # only used to generate experiment name
+        dataset_name: str,  # only used to generate experiment name
         include_filters: List[str] = [],
         exclude_filters: List[str] = [],
         use_normalization: bool = False,
@@ -990,7 +990,9 @@ class NotWellDataModule(WellDataModule):
             self._rollout_test_datasets = {}
 
         self.path = path
-        self.well_dataset_name = well_dataset_name  # for experiment naming compatibility
+        # These are not Well datasets, so the naming key is `dataset_name`
+        # (not `well_dataset_name`); used only for experiment/run naming.
+        self.dataset_name = dataset_name
         self.batch_size = batch_size
         self.world_size = world_size
         self.data_workers = data_workers

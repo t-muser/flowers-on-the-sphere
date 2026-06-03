@@ -17,6 +17,8 @@ declare -gA FOTS_DATA_RESOLUTION=(
     [mickelin]=128x256
     [swe_th]=64x128
     [global_ocean]=64x128
+    [global_ocean_3d]=64x128
+    [global_ocean_3d_latlon]=64x128
     [held_suarez]=64x128
 )
 
@@ -31,6 +33,7 @@ declare -gA FOTS_BATCH_SIZE=(
     [dandelion:256x512]=9
     [local_r_transformer:256x512]=7
     [local_s2_transformer:256x512]=4
+    [vit:256x512]=24
 
     # 128x256 (probe_memory_mickelin.sbatch)
     [fno:128x256]=98
@@ -42,6 +45,7 @@ declare -gA FOTS_BATCH_SIZE=(
     [dandelion:128x256]=43
     [local_r_transformer:128x256]=27
     [local_s2_transformer:128x256]=13
+    [vit:128x256]=96
 
     # 64x128 (estimated — ≈2.7-3.3x the 128x256 numbers, conservative vs.
     # the 3.5x linear-pixel scaling seen 256x512 -> 128x256). Probe once a

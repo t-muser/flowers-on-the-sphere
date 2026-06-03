@@ -2,8 +2,8 @@
 # 128x256 equiangular grid, vorticity = 1 channel.
 data:
   _target_: fots.data.datamodule.NotWellDataModule
-  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/mickelin-gns-hdf5
-  well_dataset_name: mickelin_gns  # experiment-naming only
+  path: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/mickelin-gns-hdf5
+  dataset_name: mickelin_gns  # experiment-naming only
 
   # Our spherical HDF5 spec (no BC group; explicit vector components).
   train_dataset:
@@ -20,10 +20,68 @@ data:
   min_dt_stride: 1
   max_dt_stride: 1
 
-  # No stats.yaml shipped with the dataset yet -> normalization off. Inline a
-  # `stats:` block (see planetswe.yaml) once Welford stats are computed.
-  use_normalization: false
+  # ZScore normalization. Stats inlined from the dataset's own stats.yaml
+  # (mickelin-gns-hdf5/stats.yaml); inlined rather than read from disk because
+  # NotWellDataModule doesn't forward normalization_path and the WellDataset
+  # default (`../stats.yaml`) resolves to the parent dir, not the dataset.
+  use_normalization: true
   include_filters: []
   exclude_filters: []
   boundary_return_type: null  # closed sphere: no BCs (the dataset enforces this too)
   meta_scalars: []
+
+  # Full stats (field + all per-trajectory constant scalars): the_well treats
+  # the h5 `scalars/` group (R, tau, seed, ...) as constant scalars, so
+  # ZScoreNormalization requires an entry for each or it errors out and
+  # silently disables normalization.
+  stats:
+    vorticity:
+      mean: 1.0e-06
+      std: 0.004044
+      rms: 0.004044
+      log_mean: .nan
+      log_std: .nan
+      mean_delta: 0.0
+      std_delta: 0.00358
+    R:
+      mean: 1.0
+      std: 0.0
+      rms: 1.0
+      mean_delta: 0.0
+      std_delta: 0.0
+    tau:
+      mean: 1.0
+      std: 0.0
+      rms: 1.0
+      mean_delta: 0.0
+      std_delta: 0.0
+    Lambda:
+      mean: 0.234962
+      std: 0.147898
+      rms: 0.277635
+      mean_delta: 0.0
+      std_delta: 0.0
+    kappa:
+      mean: 6.373684
+      std: 4.502379
+      rms: 7.803542
+      mean_delta: 0.0
+      std_delta: 0.0
+    seed:
+      mean: 19.465461
+      std: 11.535363
+      rms: 22.626726
+      mean_delta: 0.0
+      std_delta: 0.0
+    r_over_lambda:
+      mean: 5.947368
+      std: 2.98194
+      rms: 6.653056
+      mean_delta: 0.0
+      std_delta: 0.0
+    kappa_lambda:
+      mean: 1.094737
+      std: 0.485011
+      rms: 1.197366
+      mean_delta: 0.0
+      std_delta: 0.0
