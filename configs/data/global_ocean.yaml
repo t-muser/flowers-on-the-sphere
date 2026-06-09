@@ -9,7 +9,9 @@
 # valid_mask for masked loss.
 data:
   _target_: fots.data.global_ocean.GlobalOceanDataModule
-  root: ${oc.env:DATA_ROOT}/global-ocean
+  # v2 is the converted store; the source v3 tree at .../global-ocean is
+  # unreadable by the container's zarr 2.x. See scripts/convert_global_ocean_zarr_v3_to_v2.py.
+  root: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/global-ocean-v2
   dataset_name: global_ocean
   time_steps_per_run: 1189
   # 5 dyn (theta_k1, salt_k1, u_east, v_north, eta) + 1 depth + 2 doy.
