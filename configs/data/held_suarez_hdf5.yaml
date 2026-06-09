@@ -6,8 +6,11 @@
 # SphericalHDF5Dataset broadcasts them over the level axis at normalize time.
 data:
   _target_: fots.data.datamodule.NotWellDataModule
-  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/held-suarez-clima-hdf5
-  well_dataset_name: held_suarez_clima
+  # NOTE: the .h5 data is NOT on iopsstor yet (only stats.* present) — this
+  # path is set for when it lands; training will fail until the data is here.
+  path: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/held-suarez-clima-hdf5
+  dataset_name: held_suarez_clima  # experiment-naming only
+
   train_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
@@ -20,11 +23,18 @@ data:
   n_steps_output: 1
   min_dt_stride: 1
   max_dt_stride: 1
+
+  # ZScore normalization. Full stats (fields + all per-trajectory constant
+  # scalars) inlined from held-suarez-clima-hdf5/stats.yaml; the_well needs an
+  # entry for every constant scalar or it silently disables normalization.
+  # T and velocity stats are PER-LEVEL (8 levels); SphericalHDF5Dataset
+  # reshapes them to broadcast over the level axis at normalize time.
   use_normalization: true
   include_filters: []
   exclude_filters: []
   boundary_return_type: null
   meta_scalars: []
+
   stats:
     T:
       mean:

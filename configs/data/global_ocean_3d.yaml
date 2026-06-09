@@ -18,7 +18,7 @@
 # conditioning channels for 28 inputs / 25 outputs.
 data:
   _target_: fots.data.global_ocean_3d.GlobalOcean3DDataModule
-  root: ${oc.env:DATA_ROOT}/global-ocean-3D
+  root: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/global-ocean-3D-v2
   dataset_name: global_ocean_3d
   time_steps_per_run: 1189
   # Headline 6-level log-spaced subset:

@@ -121,8 +121,12 @@ def setup_wandb(cfg: DictConfig, experiment_folder: str, experiment_name: str) -
     project = OmegaConf.select(wandb_cfg, "project") or "flowers-on-the-sphere"
     entity = OmegaConf.select(wandb_cfg, "entity") or None
     # Default group = dataset name so all runs on the same dataset land
-    # together on the wandb project page.
-    dataset_name = OmegaConf.select(cfg, "data.dataset_name")
+    # together on the wandb project page. Fall back to well_dataset_name for
+    # the HDF5/the_well datamodules, which expose that instead of
+    # dataset_name (mirrors get_experiment_name in fots.utils).
+    dataset_name = OmegaConf.select(cfg, "data.dataset_name") or OmegaConf.select(
+        cfg, "data.well_dataset_name"
+    )
     group = OmegaConf.select(wandb_cfg, "group") or dataset_name
     tags = list(OmegaConf.select(wandb_cfg, "tags") or [])
     if dataset_name and dataset_name not in tags:

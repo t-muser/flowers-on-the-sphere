@@ -1,51 +1,53 @@
 # Galewsky shallow-water on the sphere, HDF5 spec (scripts/zarr_to_hdf5.py).
 # 256x512 equiangular grid, 3 channels: h (scalar) + velocity vector
-# [u_phi, u_theta]. Diagnostic `vorticity` dropped at conversion time.
-# Stats: train split, parallel-Welford (scripts/compute_hdf5_stats.py); incl. constant-scalar params.
+# [u_phi, u_theta]. Diagnostic `vorticity` is dropped at conversion time.
 data:
   _target_: fots.data.datamodule.NotWellDataModule
-  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/galewsky-sw-hdf5
-  well_dataset_name: galewsky_sw
+  path: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/galewsky-sw-hdf5
+  dataset_name: galewsky_sw  # experiment-naming only
+
   train_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
   eval_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
+
   batch_size: 2
   data_workers: 8
   n_steps_input: 1
   n_steps_output: 1
   min_dt_stride: 1
   max_dt_stride: 1
+
+  # ZScore normalization. Full stats (fields + all per-trajectory constant
+  # scalars) inlined from galewsky-sw-hdf5/stats.yaml; the_well needs an entry
+  # for every constant scalar or it silently disables normalization. Inlined
+  # rather than read from disk (NotWellDataModule doesn't forward
+  # normalization_path; the WellDataset default resolves to the parent dir).
   use_normalization: true
   include_filters: []
   exclude_filters: []
-  boundary_return_type: null
+  boundary_return_type: null  # closed sphere: no BCs
   meta_scalars: []
+
   stats:
     h:
       mean: -50.391227
       std: 528.270282
       rms: 530.668226
+      log_mean: .nan
+      log_std: .nan
       mean_delta: -0.060222
       std_delta: 16.318138
     velocity:
-      mean:
-      - 2.879668
-      - 0.000479
-      std:
-      - 18.162678
-      - 16.140085
-      rms:
-      - 18.389545
-      - 16.140085
-      mean_delta:
-      - 0.000563
-      - -0.0
-      std_delta:
-      - 1.620033
-      - 1.676007
+      mean: [2.879668, 0.000479]
+      std: [18.162678, 16.140085]
+      rms: [18.389545, 16.140085]
+      log_mean: [.nan, .nan]
+      log_std: [.nan, .nan]
+      mean_delta: [0.000563, -0.0]
+      std_delta: [1.620033, 1.676007]
     u_max:
       mean: 80.15625
       std: 14.27872

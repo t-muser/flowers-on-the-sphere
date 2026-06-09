@@ -1,32 +1,43 @@
 # Cahn-Hilliard phase field on the sphere, HDF5 spec (scripts/zarr_to_hdf5.py).
 # 256x512 equiangular grid, phi = 1 channel.
-# Stats: train split, parallel-Welford (scripts/compute_hdf5_stats.py); incl. constant-scalar params.
 data:
   _target_: fots.data.datamodule.NotWellDataModule
-  path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/cahn-hilliard-sphere-hdf5
-  well_dataset_name: cahn_hilliard
+  path: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/cahn-hilliard-sphere-hdf5
+  dataset_name: cahn_hilliard  # experiment-naming only
+
   train_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
   eval_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
+
   batch_size: 2
   data_workers: 8
   n_steps_input: 1
   n_steps_output: 1
   min_dt_stride: 1
   max_dt_stride: 1
+
+  # ZScore normalization. Full stats (field + all per-trajectory constant
+  # scalars) inlined from cahn-hilliard-sphere-hdf5/stats.yaml: the_well treats
+  # the h5 `scalars/` group as constant scalars, so ZScoreNormalization needs
+  # an entry for each or it errors out and silently disables normalization.
+  # Inlined rather than read from disk because NotWellDataModule doesn't
+  # forward normalization_path (default `../stats.yaml` resolves to the parent).
   use_normalization: true
   include_filters: []
   exclude_filters: []
-  boundary_return_type: null
+  boundary_return_type: null  # closed sphere: no BCs
   meta_scalars: []
+
   stats:
     phi:
       mean: 0.498127
       std: 0.293091
       rms: 0.577956
+      log_mean: .nan
+      log_std: .nan
       mean_delta: -8.1e-05
       std_delta: 0.021969
     epsilon:

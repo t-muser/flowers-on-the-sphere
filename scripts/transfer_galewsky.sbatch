@@ -21,6 +21,7 @@
 # (the SBATCH directives are inert in that case).
 
 set -euo pipefail
+ulimit -c 0
 cd "$SLURM_SUBMIT_DIR"
 mkdir -p slurm/logs
 

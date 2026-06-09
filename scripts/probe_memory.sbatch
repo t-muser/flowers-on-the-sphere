@@ -19,6 +19,7 @@
 # in scripts/submit_train_and_test.sh).
 
 set -uo pipefail
+ulimit -c 0
 cd "$SLURM_SUBMIT_DIR"
 mkdir -p slurm/logs
 
