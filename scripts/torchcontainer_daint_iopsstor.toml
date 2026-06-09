@@ -1,0 +1,17 @@
+image = "/iopsstor/scratch/cscs/tmuser/container_images/aurora_arm64_modulus2412.sqsh"
+
+writable = true
+mounts = ["/users", "/iopsstor"]
+
+# Capstor-independent variant of torchcontainer_daint.toml: image is on
+# /iopsstor (copied from /capstor/store/.../enroot/aurora_arm64_modulus2412.sqsh)
+# and the /capstor mount is dropped so jobs neither read nor write that
+# filesystem. Use whenever capstor is reported offline.
+#
+# NOTE: aws_ofi_nccl hook is Clariden-only; on Daint the plugin is not
+# installed inside the container, so train_daint.sbatch sets
+# NCCL_NET_PLUGIN="" to avoid NCCL trying to load it.
+
+[env]
+FI_CXI_DISABLE_HOST_REGISTER = "1"
+FI_MR_CACHE_MONITOR = "userfaultfd"
