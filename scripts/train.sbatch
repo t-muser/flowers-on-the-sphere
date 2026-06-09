@@ -16,6 +16,7 @@
 # from the submit script (--time=24:00:00 train, --time=02:00:00 test).
 
 set -euo pipefail
+ulimit -c 0
 cd "$SLURM_SUBMIT_DIR"
 mkdir -p slurm/logs
 

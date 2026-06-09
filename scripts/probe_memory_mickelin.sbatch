@@ -15,6 +15,7 @@
 # Batch ranges are scaled ~4x from the PlanetSWE probe to bracket OOM.
 
 set -uo pipefail
+ulimit -c 0
 cd "$SLURM_SUBMIT_DIR"
 mkdir -p slurm/logs
 

@@ -10,6 +10,7 @@
 #SBATCH --error=slurm/logs/%x-%j.err
 
 set -euo pipefail
+ulimit -c 0
 cd "$SLURM_SUBMIT_DIR"
 mkdir -p slurm/logs
 
