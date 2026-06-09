@@ -1,8 +1,9 @@
 # Held-Suarez (ClimaAtmos) on the sphere, HDF5 spec (scripts/zarr_to_hdf5.py).
 # 3-D grid: spatial = (level=8, lat=144, lon=288). 4 channels: T, ps (surface,
-# broadcast across levels) + velocity vector [u, v]. Note input_fields are
-# (T, C, level, lat, lon) -- a 2-sphere model (SFNO/S2) needs a level->channel
-# adapter; a 3-D-aware model can consume the grid directly.
+# broadcast across levels) + velocity vector [u, v]. input_fields are
+# (T, C, level, lat, lon) -- a 2-sphere model needs a level->channel adapter.
+# Stats are PER-LEVEL: T -> 8 values, velocity -> 8x2; ps/2-D stay single.
+# SphericalHDF5Dataset broadcasts them over the level axis at normalize time.
 data:
   _target_: fots.data.datamodule.NotWellDataModule
   # NOTE: the .h5 data is NOT on iopsstor yet (only stats.* present) — this
@@ -16,7 +17,6 @@ data:
   eval_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
-
   batch_size: 2
   data_workers: 8
   n_steps_input: 1
@@ -27,37 +27,153 @@ data:
   # ZScore normalization. Full stats (fields + all per-trajectory constant
   # scalars) inlined from held-suarez-clima-hdf5/stats.yaml; the_well needs an
   # entry for every constant scalar or it silently disables normalization.
+  # T and velocity stats are PER-LEVEL (8 levels); SphericalHDF5Dataset
+  # reshapes them to broadcast over the level axis at normalize time.
   use_normalization: true
   include_filters: []
   exclude_filters: []
-  boundary_return_type: null  # closed sphere: no BCs
+  boundary_return_type: null
   meta_scalars: []
 
   stats:
     T:
-      mean: 247.276343
-      std: 35.873049
-      rms: 249.864894
-      log_mean: .nan
-      log_std: .nan
-      mean_delta: -0.000138
-      std_delta: 0.684541
+      mean:
+      - 201.027342
+      - 202.144028
+      - 215.30994
+      - 247.846186
+      - 267.965178
+      - 278.812129
+      - 282.3563
+      - 282.749642
+      std:
+      - 6.705256
+      - 7.738064
+      - 3.776323
+      - 10.655489
+      - 13.551601
+      - 15.439949
+      - 16.128758
+      - 16.450789
+      rms:
+      - 201.139137
+      - 202.29208
+      - 215.343054
+      - 248.075132
+      - 268.307627
+      - 279.239316
+      - 282.816579
+      - 283.227803
+      mean_delta:
+      - -0.000506
+      - -0.000363
+      - -0.000105
+      - -3.4e-05
+      - -4.3e-05
+      - -5.1e-05
+      - -3.6e-05
+      - 3.8e-05
+      std_delta:
+      - 0.287642
+      - 0.376987
+      - 0.459252
+      - 0.636636
+      - 0.797441
+      - 0.824987
+      - 0.820235
+      - 0.95833
     ps:
       mean: 100044.747756
       std: 993.98922
       rms: 100049.685498
-      log_mean: .nan
-      log_std: .nan
       mean_delta: -0.00388
       std_delta: 146.920601
     velocity:
-      mean: [3.502222, -0.000129]
-      std: [9.796603, 6.41015]
-      rms: [10.403797, 6.41015]
-      log_mean: [.nan, .nan]
-      log_std: [.nan, .nan]
-      mean_delta: [-1.4e-05, -4.0e-06]
-      std_delta: [1.582225, 2.016458]
+      mean:
+      - - 0.893571
+        - 0.000116
+      - - 4.861114
+        - -7.3e-05
+      - - 9.59034
+        - 0.000412
+      - - 6.892978
+        - 0.000851
+      - - 4.094062
+        - 4.7e-05
+      - - 1.819422
+        - -0.000439
+      - - 0.605712
+        - -0.00088
+      - - -0.739424
+        - -0.001065
+      std:
+      - - 7.888752
+        - 3.702707
+      - - 10.115845
+        - 5.589699
+      - - 14.254072
+        - 10.159503
+      - - 11.262434
+        - 8.468581
+      - - 7.963444
+        - 5.857821
+      - - 6.352025
+        - 4.834348
+      - - 6.190704
+        - 4.810916
+      - - 6.658586
+        - 5.291798
+      rms:
+      - - 7.939198
+        - 3.702707
+      - - 11.223223
+        - 5.589699
+      - - 17.180023
+        - 10.159503
+      - - 13.204377
+        - 8.468581
+      - - 8.954205
+        - 5.857821
+      - - 6.607459
+        - 4.834348
+      - - 6.220266
+        - 4.810916
+      - - 6.699516
+        - 5.291798
+      mean_delta:
+      - - -0.000516
+        - 2.0e-06
+      - - -8.9e-05
+        - -1.0e-06
+      - - 0.00016
+        - -1.1e-05
+      - - 0.00011
+        - -1.1e-05
+      - - 8.2e-05
+        - -1.0e-05
+      - - 5.8e-05
+        - -2.0e-06
+      - - 4.6e-05
+        - 2.0e-06
+      - - 4.1e-05
+        - 2.0e-06
+      std_delta:
+      - - 0.640613
+        - 0.730069
+      - - 0.936693
+        - 1.191067
+      - - 2.258839
+        - 3.002162
+      - - 2.156818
+        - 2.884003
+      - - 1.45604
+        - 1.871997
+      - - 1.337507
+        - 1.621075
+      - - 1.462396
+        - 1.73444
+      - - 1.714038
+        - 2.026374
     omega_factor:
       mean: 1.192308
       std: 0.61201
