@@ -1,27 +1,78 @@
 # Galewsky shallow-water on the sphere, HDF5 spec (scripts/zarr_to_hdf5.py).
 # 256x512 equiangular grid, 3 channels: h (scalar) + velocity vector
-# [u_phi, u_theta]. Diagnostic `vorticity` is dropped at conversion time.
+# [u_phi, u_theta]. Diagnostic `vorticity` dropped at conversion time.
+# Stats: train split, parallel-Welford (scripts/compute_hdf5_stats.py); incl. constant-scalar params.
 data:
   _target_: fots.data.datamodule.NotWellDataModule
   path: /scicore/home/dokman0000/GROUP/PDEDatasets/SphericalPDEs/galewsky-sw-hdf5
-  well_dataset_name: galewsky_sw  # experiment-naming only
-
+  well_dataset_name: galewsky_sw
   train_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
   eval_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
-
   batch_size: 2
   data_workers: 8
   n_steps_input: 1
   n_steps_output: 1
   min_dt_stride: 1
   max_dt_stride: 1
-
-  use_normalization: false  # add an inline `stats:` block for real training
+  use_normalization: true
   include_filters: []
   exclude_filters: []
-  boundary_return_type: null  # closed sphere: no BCs
+  boundary_return_type: null
   meta_scalars: []
+  stats:
+    h:
+      mean: -50.391227
+      std: 528.270282
+      rms: 530.668226
+      mean_delta: -0.060222
+      std_delta: 16.318138
+    velocity:
+      mean:
+      - 2.879668
+      - 0.000479
+      std:
+      - 18.162678
+      - 16.140085
+      rms:
+      - 18.389545
+      - 16.140085
+      mean_delta:
+      - 0.000563
+      - -0.0
+      std_delta:
+      - 1.620033
+      - 1.676007
+    u_max:
+      mean: 80.15625
+      std: 14.27872
+      rms: 81.418095
+      mean_delta: 0.0
+      std_delta: 0.0
+    lat_center:
+      mean: 44.817708
+      std: 11.225348
+      rms: 46.202115
+      mean_delta: 0.0
+      std_delta: 0.0
+    h_hat:
+      mean: 151.875
+      std: 89.980467
+      rms: 176.529034
+      mean_delta: 0.0
+      std_delta: 0.0
+    H:
+      mean: 10997.395833
+      std: 2212.651475
+      rms: 11217.777929
+      mean_delta: 0.0
+      std_delta: 0.0
+    seed:
+      mean: 2.467448
+      std: 1.718158
+      rms: 3.00672
+      mean_delta: 0.0
+      std_delta: 0.0
