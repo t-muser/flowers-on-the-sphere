@@ -50,6 +50,15 @@ SPLIT_MAP = {"train": "train", "val": "valid", "test": "test"}
 # fields to keep; ``drop`` lists diagnostic fields to skip. ``level_dim`` set
 # means levels become a third spatial dim (held-suarez, ocean-3D). Vectors map
 # a field name -> ordered list of its component fields.
+#
+# For curvilinear grids whose dims are not (lat, lon), set ``spatial_dims``
+# explicitly (e.g. cubed-sphere ``[level, face, j, i]``). ``rename_dims`` maps a
+# source dim/coord to its canonical name (e.g. the atm ``Zsigma`` -> ``level``
+# so the per-level stats/normalization machinery keys off ``level``).
+# ``aux_coords`` lists curvilinear coordinate variables (e.g. ``XC``/``YC``
+# physical lon/lat that live on (face, j, i)) to preserve verbatim under an
+# ``aux_coords/`` group, since the 1-D per-dim ``dimensions/`` entries are only
+# integer panel/cell indices for a cubed sphere.
 DATASET_SPECS: dict[str, dict] = {
     "mickelin-gns": dict(
         name="mickelin_gns", scalars=["vorticity"], vectors={}, drop=[],
@@ -71,6 +80,30 @@ DATASET_SPECS: dict[str, dict] = {
         scalars=["T", "ps"],  # ps is surface-only -> broadcast across levels
         vectors={"velocity": ["u", "v"]}, drop=[],
     ),
+    # Coupled AIM atmosphere + ocean, native cs32 cubed sphere. The canonical
+    # channel layout (datagen/cpl_aim_ocn/channels.py) treats every stream as an
+    # independent scalar, so we store all 19 streams as t0 scalars rather than
+    # imposing tangent-vector semantics on the grid-relative MITgcm UVEL/VVEL.
+    # The 4 atm 3-D streams span the 5 σ-levels (Zsigma -> level); the 9 atm
+    # surface + 6 ocean surface streams set dim_varying[level]=False (size-1
+    # placeholder, broadcast on read) exactly like held-suarez ``ps``.
+    "cpl-aim-ocn": dict(
+        name="cpl_aim_ocn",
+        spatial_dims=["level", "face", "j", "i"],
+        rename_dims={"Zsigma": "level"},
+        aux_coords=["XC", "YC", "XG", "YG"],
+        scalars=[
+            # atm 2-D surface (no level axis)
+            "atm_TS", "atm_QS", "atm_PRECON", "atm_PRECLS", "atm_WINDS",
+            "atm_UFLUX", "atm_VFLUX", "atm_SI_Fract", "atm_SI_Thick",
+            # atm 3-D on 5 σ-levels
+            "atm_UVEL", "atm_VVEL", "atm_THETA", "atm_SALT",
+            # ocean surface
+            "ocn_THETA", "ocn_SALT", "ocn_UVEL", "ocn_VVEL",
+            "ocn_ETAN", "ocn_MXLDEPTH",
+        ],
+        vectors={}, drop=[],
+    ),
 }
 
 
@@ -83,7 +116,19 @@ def _get_field(ds: xr.Dataset, name: str) -> xr.DataArray:
 
 
 def _spatial_dims(spec: dict) -> list[str]:
+    if spec.get("spatial_dims"):
+        return list(spec["spatial_dims"])
     return [spec["level_dim"], "lat", "lon"] if spec.get("level_dim") else ["lat", "lon"]
+
+
+def _coord_values(ds: xr.Dataset, dim: str) -> np.ndarray:
+    """Coordinate array for a spatial dim. Falls back to an integer index when
+    the dim carries no coordinate variable -- a cubed sphere's ``face``/``j``/
+    ``i`` are bare panel/cell indices, with the physical lon/lat held in the 2-D
+    ``aux_coords`` (XC/YC) instead."""
+    if dim in ds.variables:
+        return np.asarray(ds[dim].values)
+    return np.arange(ds.sizes[dim])
 
 
 def _store_axes(da: xr.DataArray, spatial: list[str]) -> tuple[np.ndarray, list[bool]]:
@@ -108,8 +153,13 @@ def convert_one(src: Path, dst: Path, spec: dict, grid_type: str) -> tuple[Path,
     dst.parent.mkdir(parents=True, exist_ok=True)
     ds = xr.open_zarr(str(src)).load()
 
+    rename = {k: v for k, v in (spec.get("rename_dims") or {}).items()
+              if k in ds.dims or k in ds.coords}
+    if rename:
+        ds = ds.rename(rename)
+
     spatial = _spatial_dims(spec)
-    coord_arrays = {d: ds[d].values for d in spatial}
+    coord_arrays = {d: _coord_values(ds, d) for d in spatial}
     tvals = ds["time"].values.astype(np.float64)
     params = {k[len("param_"):]: v for k, v in ds.attrs.items() if k.startswith("param_")}
 
@@ -126,6 +176,20 @@ def convert_one(src: Path, dst: Path, spec: dict, grid_type: str) -> tuple[Path,
         for key, val in [("time", tvals)] + [(d, coord_arrays[d]) for d in spatial]:
             g.create_dataset(key, data=np.asarray(val))
             g[key].attrs["sample_varying"] = False
+
+        # Curvilinear physical coordinates (e.g. cubed-sphere XC/YC on
+        # (face, j, i)) preserved verbatim; the loader ignores this group.
+        present_aux = [c for c in spec.get("aux_coords", []) if c in ds.variables]
+        if present_aux:
+            ga = f.create_group("aux_coords")
+            ga.attrs["field_names"] = present_aux
+            for cname in present_aux:
+                cda = ds[cname]
+                ga.create_dataset(
+                    cname, data=np.asarray(cda.values, dtype=np.float64),
+                    compression="gzip", compression_opts=4,
+                )
+                ga[cname].attrs["dims"] = [str(x) for x in cda.dims]
 
         g = f.create_group("scalars")
         g.attrs["field_names"] = list(params.keys())
