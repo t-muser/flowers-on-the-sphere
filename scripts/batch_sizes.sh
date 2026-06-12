@@ -20,6 +20,7 @@ declare -gA FOTS_DATA_RESOLUTION=(
     [global_ocean_3d]=64x128
     [global_ocean_3d_latlon]=64x128
     [held_suarez]=64x128
+    [held_suarez_hdf5]=144x288  # ClimaAtmos clima grid, levels folded to channels
 )
 
 declare -gA FOTS_BATCH_SIZE=(
@@ -56,6 +57,13 @@ declare -gA FOTS_BATCH_SIZE=(
     [zinnia_v5:64x128]=128
     [local_r_transformer:64x128]=80
     [local_s2_transformer:64x128]=36
+
+    # 144x288 (held_suarez_hdf5; ≈1.27x the 128x256 pixels). Linear-pixel
+    # scaling gives flower≈60 / sfno≈77; cut further as a conservative
+    # first pass since the folded held-suarez has many more channels (100 in
+    # / 25 out) than the probe datasets. Probe a landed job and bump up.
+    [flower:144x288]=48
+    [sfno:144x288]=56
 )
 
 fots_batch_size() {
