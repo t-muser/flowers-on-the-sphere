@@ -458,8 +458,15 @@ class WellDataModule(AbstractDataModule):
         norm = getattr(self.train_dataset, "norm", None)
         if norm is None:
             return None
-        std = norm.flattened_stds["variable"]   # (C,)
-        mean = norm.flattened_means["variable"]  # (C,)
+        # When the dataset folds levels into channels, the per-channel stats no
+        # longer match norm.flattened_* (which is per-field, level-interleaved);
+        # use the fold-order vectors the dataset rebuilt instead.
+        folded = getattr(self.train_dataset, "folded_denorm_stats", None)
+        if folded is not None:
+            mean, std = folded
+        else:
+            std = norm.flattened_stds["variable"]   # (C,)
+            mean = norm.flattened_means["variable"]  # (C,)
 
         def _denorm(x: torch.Tensor) -> torch.Tensor:
             s = std.to(x.device).view(1, -1, 1, 1)
