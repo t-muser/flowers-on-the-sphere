@@ -39,11 +39,7 @@ data:
   # reshapes them to broadcast over the level axis at normalize time.
   use_normalization: true
   include_filters: []
-  # TEMP: valid/run_0035.h5 was re-written ~6h after the rest and its HDF5 heap
-  # is corrupt ("bad heap free list" on open) — the only bad file of 162.
-  # Excluded so training runs on the 161 healthy files; REGENERATE run_0035 and
-  # drop this entry to restore the full (16-traj) validation set.
-  exclude_filters: ["run_0035"]
+  exclude_filters: []
   boundary_return_type: null
   meta_scalars: []
 
