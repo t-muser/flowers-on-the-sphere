@@ -23,7 +23,9 @@ cd "$SLURM_SUBMIT_DIR"
 mkdir -p slurm/logs
 
 WORKDIR="${WORKDIR:-${SLURM_SUBMIT_DIR}}"
-TOMLPATH="${TOMLPATH:-${WORKDIR}/scripts/torchcontainer_daint_iopsstor.toml}"
+# Default to the /capstor image: the /iopsstor copy was deleted (jobs using
+# _iopsstor.toml fail at container start). Override TOMLPATH to switch back.
+TOMLPATH="${TOMLPATH:-${WORKDIR}/scripts/torchcontainer_daint.toml}"
 
 echo "WORKDIR:  $WORKDIR"
 echo "TOMLPATH: $TOMLPATH"
@@ -38,6 +40,8 @@ srun --ntasks=1 --ntasks-per-node=1 --cpus-per-task=72 \
     export PYTHONPATH=\"${WORKDIR}:\${PYTHONPATH:-}\"
 
     python3 -c 'import torch, h5py, hydra; print(\"torch:\", torch.__version__, \"h5py:\", h5py.__version__)'
+    # LZ4 read filter for the spherical HDF5 spec (shuffle+LZ4, filter 32004).
+    python3 -c 'import hdf5plugin' 2>/dev/null || pip install --user --no-deps hdf5plugin 2>&1 | tail -3
 
     # Pure-logic fold tests + real-data fold smoke (the latter reads the
     # on-disk dataset; both live in the same module).

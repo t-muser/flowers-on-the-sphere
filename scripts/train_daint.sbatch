@@ -95,6 +95,8 @@ srun --ntasks=1 --ntasks-per-node=1 --cpus-per-task=288 \
     python3 -c 'import torchinfo' 2>/dev/null || pip install --user --no-deps torchinfo 2>&1 | tail -3
     python3 -c 'import timm' 2>/dev/null || pip install --user timm 2>&1 | tail -5
     python3 -c 'import h5py, the_well' 2>/dev/null || pip install --user --no-deps h5py 'the-well>=1.1.0' 2>&1 | tail -5
+    # hdf5plugin registers the LZ4 read filter the spherical HDF5 spec uses.
+    python3 -c 'import hdf5plugin' 2>/dev/null || pip install --user --no-deps hdf5plugin 2>&1 | tail -3
 
     python3 -c 'import torch; print(\"torch:\", torch.__version__, \"cuda:\", torch.cuda.is_available())'
     python3 -c 'import torch_harmonics; print(\"th:\", torch_harmonics.__version__)'

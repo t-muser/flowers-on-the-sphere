@@ -22,7 +22,11 @@ data:
     _partial_: true
     fold_levels_into_channels: true
   batch_size: 2
-  data_workers: 8
+  # Data is shuffle+LZ4 (re-chunked time=4 to match the read window); the read
+  # is no longer decompression-bound, so more workers help and the GH200 cores
+  # (72/rank) are otherwise idle. Needs `import hdf5plugin` (registered in
+  # fots/data/well.py; installed in the train/smoke sbatch).
+  data_workers: 16
   n_steps_input: 1
   n_steps_output: 1
   min_dt_stride: 1
@@ -35,7 +39,11 @@ data:
   # reshapes them to broadcast over the level axis at normalize time.
   use_normalization: true
   include_filters: []
-  exclude_filters: []
+  # TEMP: valid/run_0035.h5 was re-written ~6h after the rest and its HDF5 heap
+  # is corrupt ("bad heap free list" on open) — the only bad file of 162.
+  # Excluded so training runs on the 161 healthy files; REGENERATE run_0035 and
+  # drop this entry to restore the full (16-traj) validation set.
+  exclude_filters: ["run_0035"]
   boundary_return_type: null
   meta_scalars: []
 
