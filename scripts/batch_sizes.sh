@@ -64,6 +64,10 @@ declare -gA FOTS_BATCH_SIZE=(
     # / 25 out) than the probe datasets. Probe a landed job and bump up.
     [flower:144x288]=48
     [sfno:144x288]=56
+    [fno:144x288]=56
+    [vit:144x288]=56
+    [zinnia_v5:144x288]=28
+    [dandelion:144x288]=28
 )
 
 fots_batch_size() {

@@ -21,7 +21,8 @@ cd "$(dirname "$0")/.."
 
 source scripts/batch_sizes.sh
 
-MODELS=(flower sfno)
+# Override the model set with MODELS="dandelion vit fno" ./submit...
+read -ra MODELS <<< "${MODELS:-flower sfno}"
 DATASET=held_suarez_hdf5
 LRS=(1e-4 5e-4 1e-3)
 
