@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hs-predict-cutaway
-#SBATCH --partition=l40s,a100,rtx4090
-#SBATCH --qos=l40s-6hours,a100-6hours,rtx4090-6hours
+#SBATCH --partition=dokmanic-h200
+#SBATCH --qos=dokmanic
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
