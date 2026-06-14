@@ -20,6 +20,20 @@ from typing import (
 import fsspec
 import h5py as h5
 import numpy as np
+
+# Register third-party HDF5 filters (LZ4/Zstd/Blosc) so datasets written with
+# them are *readable*. Our spherical HDF5 spec uses shuffle+LZ4 (filter 32004),
+# which is a dynamically-loaded plugin; without this import h5py raises
+# "can't open directory (.../hdf5/lib/plugin)" on the first data read. Importing
+# at module load registers the filters in this process and every DataLoader
+# worker. Guarded so gzip-only datasets still work where hdf5plugin is absent.
+try:
+    import hdf5plugin  # noqa: F401
+except ImportError:
+    warnings.warn(
+        "hdf5plugin not installed; datasets using LZ4/Zstd/Blosc filters "
+        "(e.g. the spherical HDF5 spec) will fail to read. `pip install hdf5plugin`."
+    )
 import torch
 import yaml
 from torch.utils.data import Dataset

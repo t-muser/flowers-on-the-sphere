@@ -1,24 +1,32 @@
 # Held-Suarez (ClimaAtmos) on the sphere, HDF5 spec (scripts/zarr_to_hdf5.py).
-# 3-D grid: spatial = (level=8, lat=144, lon=288). 4 channels: T, ps (surface,
-# broadcast across levels) + velocity vector [u, v]. input_fields are
-# (T, C, level, lat, lon) -- a 2-sphere model needs a level->channel adapter.
+# 3-D grid: spatial = (level=8, lat=144, lon=288). 4 fields: T, ps (surface,
+# broadcast across levels) + velocity vector [u, v]. On disk input_fields are
+# (T, C, level, lat, lon).
+#
+# fold_levels_into_channels=true collapses the level axis into channels so a
+# 2-sphere model sees (T, 25, 144, 288): field-major, levels contiguous --
+# [T_lev0..7, ps, u_lev0..7, v_lev0..7] (ps is surface-only -> 1 channel).
 # Stats are PER-LEVEL: T -> 8 values, velocity -> 8x2; ps/2-D stay single.
-# SphericalHDF5Dataset broadcasts them over the level axis at normalize time.
+# SphericalHDF5Dataset normalizes per-level, then folds (a pure reshape).
 data:
   _target_: fots.data.datamodule.NotWellDataModule
-  # NOTE: the .h5 data is NOT on iopsstor yet (only stats.* present) — this
-  # path is set for when it lands; training will fail until the data is here.
   path: /iopsstor/scratch/cscs/tmuser/PDEDatasets/SphericalPDEs/held-suarez-clima-hdf5
   dataset_name: held_suarez_clima  # experiment-naming only
 
   train_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
+    fold_levels_into_channels: true
   eval_dataset:
     _target_: fots.data.spherical_hdf5.SphericalHDF5Dataset
     _partial_: true
+    fold_levels_into_channels: true
   batch_size: 2
-  data_workers: 8
+  # Data is shuffle+LZ4 (re-chunked time=4 to match the read window); the read
+  # is no longer decompression-bound, so more workers help and the GH200 cores
+  # (72/rank) are otherwise idle. Needs `import hdf5plugin` (registered in
+  # fots/data/well.py; installed in the train/smoke sbatch).
+  data_workers: 16
   n_steps_input: 1
   n_steps_output: 1
   min_dt_stride: 1
