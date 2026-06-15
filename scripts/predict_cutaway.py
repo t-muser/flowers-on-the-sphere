@@ -190,7 +190,7 @@ def cutaway_sphere(
 def _load_cfg(args) -> "DictConfig":  # noqa: F821
     cfg = load_modular_config(
         "configs/data/held_suarez_hdf5.yaml",
-        "configs/models/flower.yaml",
+        args.model_config,
         "configs/train_4-to-1.yaml",
     )
     cfg.data.path = args.data_path
@@ -332,6 +332,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ckpt", default="",
                     help="Path to best.pt; empty -> random weights (smoke test).")
+    ap.add_argument("--model-config", default="configs/models/flower.yaml",
+                    help="Model config to build (must match the checkpoint's "
+                         "architecture, e.g. configs/models/zinnia_v5.yaml).")
     ap.add_argument("--data-path", default=DEFAULT_DATA_ROOT)
     ap.add_argument("--traj-index", type=int, default=0,
                     help="Which test-set trajectory window (0 = first).")

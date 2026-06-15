@@ -75,7 +75,7 @@ def _setup_logging() -> None:
 
 def _load_cfg(args, spec):
     cfg = load_modular_config(
-        spec["data_config"], "configs/models/flower.yaml", "configs/train_4-to-1.yaml"
+        spec["data_config"], args.model_config, "configs/train_4-to-1.yaml"
     )
     cfg.data.root = str(spec["root"])
     cfg.data.batch_size = 1
@@ -190,6 +190,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", required=True, choices=sorted(DATASETS))
     ap.add_argument("--ckpt", default="")
+    ap.add_argument("--model-config", default="configs/models/flower.yaml",
+                    help="Model config to build (must match the checkpoint, "
+                         "e.g. configs/models/zinnia_v5.yaml).")
     ap.add_argument("--run-id", type=int, default=None,
                     help="Override the notebook-chosen run id.")
     ap.add_argument("--field", default=None, help="Override the visualized field.")
