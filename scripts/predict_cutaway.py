@@ -301,8 +301,11 @@ def render(args, pred_u, true_u, lat, lon):
     frames = []
     for i in trange(n, desc="render"):
         fig = plt.figure(figsize=(15, 8), constrained_layout=True, dpi=args.dpi)
-        azim = 17.5 + (i / max(n, 1)) * 360.0
-        azim = ((azim + 180.0) % 360.0) - 180.0
+        if args.rotate:
+            azim = args.azim + (i / max(n, 1)) * 360.0
+            azim = ((azim + 180.0) % 360.0) - 180.0
+        else:
+            azim = args.azim  # static: keep the camera on the cut face
         lead_d = (i + 1) * 6 / 24.0
         for j, (data, label) in enumerate(((pred, "prediction"), (true, "ground truth"))):
             ax = fig.add_subplot(1, 2, j + 1, projection="3d")
@@ -344,6 +347,11 @@ def main() -> int:
     ap.add_argument("--fps", type=int, default=12)
     ap.add_argument("--dpi", type=int, default=100)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--azim", type=float, default=75.0,
+                    help="Camera azimuth (deg). Default 75 looks into the cut "
+                         "wedge; the field's vertical structure stays in view.")
+    ap.add_argument("--rotate", action="store_true",
+                    help="Rotate the globe over the rollout (default: static).")
     ap.add_argument("--lifting-dim", type=int, default=None,
                     help="Override model width (use a small value for CPU smoke).")
     args = ap.parse_args()

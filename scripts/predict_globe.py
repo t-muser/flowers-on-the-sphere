@@ -79,6 +79,9 @@ def _load_cfg(args, spec):
     )
     cfg.data.root = str(spec["root"])
     cfg.data.batch_size = 1
+    # train_4-to-1.yaml caps rollout at 20 steps; None -> full trajectory
+    # (time_steps_per_run - n_steps_input) for the rollout_test_dataset.
+    cfg.data.max_rollout_steps = None
     if args.lifting_dim is not None:
         cfg.model.lifting_dim = args.lifting_dim
         cfg.model.groups = args.lifting_dim
@@ -115,9 +118,12 @@ def rollout(args, spec):
     x = sample["input_fields"].unsqueeze(0).to(device)    # (1, Ti, C, H, W)
     y = sample["output_fields"].unsqueeze(0).to(device)   # (1, To, C, H, W)
     Ti, To = x.shape[1], y.shape[1]
-    steps = min(args.steps, To) if args.steps else To
-    log.info("run_%04d: warm-up %d frames, rolling %d steps",
-             spec["run_id"], Ti, steps)
+    # 0 -> full ground-truth trajectory; a value > To free-runs the model past
+    # the end of the GT (the GT panel then holds its last available frame).
+    steps = args.steps if args.steps else To
+    log.info("run_%04d: warm-up %d frames, GT length %d, rolling %d steps%s",
+             spec["run_id"], Ti, To, steps,
+             " (free-running past GT)" if steps > To else "")
 
     hist = x.reshape(1, Ti * n_field_ch, *x.shape[3:])
     preds = []
@@ -128,16 +134,21 @@ def rollout(args, spec):
             hist = torch.cat([hist[:, n_field_ch:], y_pred], dim=1)
 
     pred = torch.cat(preds, 0).numpy()                              # (steps, H, W)
-    true = dm.denormalize_fn(y[0, :steps])[:, field_idx].cpu().numpy()
+    true_full = dm.denormalize_fn(y[0])[:, field_idx].cpu().numpy()  # (To, H, W)
+    if steps <= To:
+        true = true_full[:steps]
+    else:  # hold the last GT frame once the trajectory ends
+        true = np.concatenate(
+            [true_full, np.repeat(true_full[-1:], steps - To, axis=0)], axis=0)
 
     run_zarr = spec["root"] / "test" / f"run_{spec['run_id']:04d}.zarr"
     ds = xr.open_zarr(run_zarr)
     lat = ds.lat.to_numpy()
     lon = ds.lon.to_numpy()
-    return pred, true, lat, lon
+    return pred, true, lat, lon, To
 
 
-def render(args, spec, pred, true, lat, lon):
+def render(args, spec, pred, true, lat, lon, gt_end):
     log = logging.getLogger(__name__)
     cmap = plt.get_cmap("RdBu_r")
     if spec["symmetric"]:
@@ -162,8 +173,9 @@ def render(args, spec, pred, true, lat, lon):
         cent_lon = (i / max(n, 1)) * 360.0 - 180.0
         proj = ccrs.Orthographic(central_longitude=cent_lon, central_latitude=30.0)
         fig = plt.figure(figsize=(15, 8), constrained_layout=True, dpi=args.dpi)
+        gt_label = "ground truth" if i < gt_end else "ground truth (ended)"
         for j, (data, label) in enumerate(((cyc_pred, "prediction"),
-                                           (cyc_true, "ground truth"))):
+                                           (cyc_true, gt_label))):
             ax = fig.add_subplot(1, 2, j + 1, projection=proj)
             ax.set_global()
             ax.gridlines(alpha=0.3, linestyle="--")
@@ -211,8 +223,8 @@ def main() -> int:
         spec["field"] = args.field
 
     _setup_logging()
-    pred, true, lat, lon = rollout(args, spec)
-    render(args, spec, pred, true, lat, lon)
+    pred, true, lat, lon, gt_end = rollout(args, spec)
+    render(args, spec, pred, true, lat, lon, gt_end)
     return 0
 
 
