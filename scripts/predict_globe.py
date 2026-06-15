@@ -170,8 +170,12 @@ def render(args, spec, pred, true, lat, lon, gt_end):
 
     frames = []
     for i in trange(n, desc="render"):
-        cent_lon = (i / max(n, 1)) * 360.0 - 180.0
-        proj = ccrs.Orthographic(central_longitude=cent_lon, central_latitude=30.0)
+        if args.rotate:
+            cent_lon = (i / max(n, 1)) * 360.0 - 180.0
+        else:
+            cent_lon = args.central_lon  # static globe
+        proj = ccrs.Orthographic(central_longitude=cent_lon,
+                                 central_latitude=args.central_lat)
         fig = plt.figure(figsize=(15, 8), constrained_layout=True, dpi=args.dpi)
         gt_label = "ground truth" if i < gt_end else "ground truth (ended)"
         for j, (data, label) in enumerate(((cyc_pred, "prediction"),
@@ -213,6 +217,12 @@ def main() -> int:
     ap.add_argument("--fps", type=int, default=12)
     ap.add_argument("--dpi", type=int, default=100)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--central-lon", type=float, default=0.0,
+                    help="Static globe central longitude (deg).")
+    ap.add_argument("--central-lat", type=float, default=30.0,
+                    help="Globe central latitude (deg).")
+    ap.add_argument("--rotate", action="store_true",
+                    help="Rotate the globe over the rollout (default: static).")
     ap.add_argument("--lifting-dim", type=int, default=None)
     args = ap.parse_args()
 
