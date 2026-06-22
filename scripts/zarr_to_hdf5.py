@@ -104,6 +104,21 @@ DATASET_SPECS: dict[str, dict] = {
         ],
         vectors={}, drop=[],
     ),
+    # MITgcm global-ocean tutorial, native cs32 cubed sphere (6 faces, 32x32),
+    # full-depth store: theta/salt/u/v on 15 model levels plus surface eta, as
+    # per-variable arrays. As with cpl-aim-ocn the velocities are grid-relative
+    # cubed-sphere components, so every stream is an independent t0 scalar (no
+    # tangent-vector semantics on a non-lat/lon grid). ``eta`` omits the level
+    # axis -> dim_varying[level]=False (broadcast on read), exactly like
+    # held-suarez ``ps``. ``depth`` is the physical (m) coordinate of the
+    # 1-indexed levels, preserved verbatim under aux_coords.
+    "global-ocean-3D": dict(
+        name="global_ocean_3d",
+        spatial_dims=["level", "face", "y", "x"],
+        aux_coords=["xc", "yc", "depth"],
+        scalars=["theta", "salt", "u", "v", "eta"],
+        vectors={}, drop=[],
+    ),
 }
 
 
@@ -131,6 +146,37 @@ def _coord_values(ds: xr.Dataset, dim: str) -> np.ndarray:
     return np.arange(ds.sizes[dim])
 
 
+def _chunks(shape: tuple[int, ...], chunk_time: int) -> tuple[int, ...]:
+    """Chunk shape for a field stored as ``(1, time, *spatial[, comp])``.
+
+    The read path windows a handful of consecutive time steps over the FULL
+    spatial field, so we chunk the time axis small (``chunk_time``, matched to
+    the training window) and keep every other axis at full extent -- one chunk
+    holds a contiguous time-block of complete snapshots. This is the opposite of
+    h5py's default auto-chunking, which picks a time-fat, spatially-shredded
+    chunk (e.g. ``(1, 92, 1, 9, 36)``): there a 6-step window forces
+    decompressing the whole 92-step block across ~1024 spatial chunks -- a ~15x
+    read amplification that dominates load time. See zarr-to-hdf5 perf notes."""
+    return (1, min(chunk_time, shape[1])) + tuple(shape[2:])
+
+
+def _compression_kwargs(compression: str, shuffle: bool) -> dict:
+    """h5py ``create_dataset`` kwargs for the chosen codec. ``gzip`` is built
+    into h5py; ``lz4`` needs the ``hdf5plugin`` filter registered (in BOTH the
+    writer here and any reader). ``shuffle`` byte-transposes floats so the codec
+    compresses them far better and faster -- cheap, always worth it."""
+    if compression == "gzip":
+        return dict(compression="gzip", compression_opts=4, shuffle=shuffle)
+    if compression == "lz4":
+        import hdf5plugin  # registers the LZ4 HDF5 filter (id 32004)
+
+        kw = dict(hdf5plugin.LZ4())
+        if shuffle:
+            kw["shuffle"] = True
+        return kw
+    raise ValueError(f"unknown compression {compression!r} (gzip|lz4)")
+
+
 def _store_axes(da: xr.DataArray, spatial: list[str]) -> tuple[np.ndarray, list[bool]]:
     """Transpose ``da`` to (time, *spatial) and return the array plus a
     ``dim_varying`` flag per spatial dim (False where the field omits it).
@@ -147,9 +193,20 @@ def _store_axes(da: xr.DataArray, spatial: list[str]) -> tuple[np.ndarray, list[
     return arr, dim_varying
 
 
-def convert_one(src: Path, dst: Path, spec: dict, grid_type: str) -> tuple[Path, str]:
-    if dst.exists():
+def convert_one(
+    src: Path,
+    dst: Path,
+    spec: dict,
+    grid_type: str,
+    *,
+    chunk_time: int = 4,
+    compression: str = "gzip",
+    shuffle: bool = True,
+    overwrite: bool = False,
+) -> tuple[Path, str]:
+    if dst.exists() and not overwrite:
         return src, "skip(exists)"
+    comp = _compression_kwargs(compression, shuffle)
     dst.parent.mkdir(parents=True, exist_ok=True)
     ds = xr.open_zarr(str(src)).load()
 
@@ -161,7 +218,17 @@ def convert_one(src: Path, dst: Path, spec: dict, grid_type: str) -> tuple[Path,
     spatial = _spatial_dims(spec)
     coord_arrays = {d: _coord_values(ds, d) for d in spatial}
     tvals = ds["time"].values.astype(np.float64)
+    # Per-run parameters arrive either as flat ``param_*`` root attrs (most
+    # producers) or bundled in a single ``params`` mapping attr -- a dict when
+    # xarray decoded it, a JSON string otherwise (the MITgcm ocean stores).
     params = {k[len("param_"):]: v for k, v in ds.attrs.items() if k.startswith("param_")}
+    if not params and "params" in ds.attrs:
+        raw = ds.attrs["params"]
+        if isinstance(raw, str):
+            import json
+            raw = json.loads(raw)
+        if isinstance(raw, dict):
+            params = dict(raw)
 
     tmp = dst.with_suffix(".h5.tmp")
     with h5py.File(tmp, "w") as f:
@@ -203,7 +270,8 @@ def convert_one(src: Path, dst: Path, spec: dict, grid_type: str) -> tuple[Path,
         g.attrs["field_names"] = list(spec["scalars"])
         for name in spec["scalars"]:
             arr, dim_varying = _store_axes(_get_field(ds, name), spatial)
-            dset = g.create_dataset(name, data=arr[None], compression="gzip", compression_opts=4)
+            data = arr[None]
+            dset = g.create_dataset(name, data=data, chunks=_chunks(data.shape, chunk_time), **comp)
             dset.attrs["dim_varying"] = dim_varying
             dset.attrs["sample_varying"] = True
             dset.attrs["time_varying"] = True
@@ -215,7 +283,8 @@ def convert_one(src: Path, dst: Path, spec: dict, grid_type: str) -> tuple[Path,
             stacked = [_store_axes(_get_field(ds, c), spatial) for c in comps]
             arr = np.stack([a for a, _ in stacked], axis=-1)  # (time, *spatial, C)
             dim_varying = stacked[0][1]
-            dset = g.create_dataset(vname, data=arr[None], compression="gzip", compression_opts=4)
+            data = arr[None]
+            dset = g.create_dataset(vname, data=data, chunks=_chunks(data.shape, chunk_time), **comp)
             dset.attrs["dim_varying"] = dim_varying
             dset.attrs["sample_varying"] = True
             dset.attrs["time_varying"] = True
@@ -239,6 +308,19 @@ def main() -> None:
     ap.add_argument("--grid-type", default="spherical")
     ap.add_argument("--limit-per-split", type=int, default=None)
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--chunk-time", type=int, default=4,
+                    help="Time-axis chunk size; match the training read window. "
+                         "Small + full spatial extent avoids read amplification.")
+    ap.add_argument("--compression", choices=("gzip", "lz4"), default="gzip",
+                    help="lz4 (via hdf5plugin) decompresses far faster than gzip.")
+    ap.add_argument("--no-shuffle", dest="shuffle", action="store_false",
+                    help="Disable the byte-shuffle filter (on by default).")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="Re-export existing files (atomic tmp+rename) instead of skipping them.")
+    ap.add_argument("--index", type=int, default=None,
+                    help="Process only the Nth store in the (deterministic) job list -- "
+                         "one run per SLURM array task. Job order is stable: splits in "
+                         "train,val,test order, each sorted by name.")
     args = ap.parse_args()
 
     spec = DATASET_SPECS[args.dataset]
@@ -253,12 +335,20 @@ def main() -> None:
         for store in stores:
             jobs.append((store, dst / "data" / well_split / store.name.replace(".zarr", ".h5")))
 
+    if args.index is not None:
+        if not 0 <= args.index < len(jobs):
+            ap.error(f"--index {args.index} out of range [0, {len(jobs)})")
+        jobs = jobs[args.index : args.index + 1]
+
     print(f"converting {len(jobs)} stores: {src} -> {dst}/data  (fields: "
-          f"scalars={spec['scalars']} vectors={list(spec['vectors'])} drop={spec.get('drop', [])})")
+          f"scalars={spec['scalars']} vectors={list(spec['vectors'])} drop={spec.get('drop', [])}; "
+          f"chunk_time={args.chunk_time} compression={args.compression} shuffle={args.shuffle})")
     t0 = time.time()
     n_ok = n_skip = n_err = 0
+    opts = dict(chunk_time=args.chunk_time, compression=args.compression,
+                shuffle=args.shuffle, overwrite=args.overwrite)
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
-        futures = {ex.submit(convert_one, s, d, spec, args.grid_type): s for s, d in jobs}
+        futures = {ex.submit(convert_one, s, d, spec, args.grid_type, **opts): s for s, d in jobs}
         for i, fut in enumerate(as_completed(futures)):
             try:
                 s, status = fut.result()

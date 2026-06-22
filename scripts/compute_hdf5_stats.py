@@ -39,6 +39,15 @@ import h5py
 import numpy as np
 import yaml
 
+try:
+    # Register the LZ4/Blosc HDF5 filters so fields written by zarr_to_hdf5.py
+    # with --compression lz4 (e.g. held-suarez-clima, the ocean stores) are
+    # readable here. Each worker re-imports this module, so the filter is
+    # registered in every process. gzip files need nothing extra.
+    import hdf5plugin  # noqa: F401
+except ModuleNotFoundError:
+    pass
+
 # Welford accumulator = (n, mean, M2), all float64.
 _ZERO = (0, 0.0, 0.0)
 
